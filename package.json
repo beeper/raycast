@@ -18,15 +18,14 @@
       "title": "Focus Beeper Desktop",
       "description": "Bring Beeper Desktop to the foreground",
       "mode": "no-view"
-    }
-  ,
+    },
     {
       "name": "find-chat",
       "title": "Find Chat",
       "description": "Find chats from Beeper Desktop",
       "mode": "view"
     }
-      ],
+  ],
   "preferences": [
     {
       "name": "baseUrl",
@@ -38,7 +37,7 @@
     }
   ],
   "dependencies": {
-    "@beeper/desktop-api": "^0.1.1",
+    "@beeper/desktop-api": "^0.1.4",
     "@raycast/api": "^1.102.6",
     "@raycast/utils": "^1.17.0"
   },

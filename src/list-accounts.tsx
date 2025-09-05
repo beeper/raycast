@@ -1,36 +1,75 @@
-import { ActionPanel, Detail, List, Action, Icon } from "@raycast/api";
-import { withAccessToken } from "@raycast/utils";
+import { ActionPanel, Detail, List, Action, Icon, Keyboard, Color } from "@raycast/api";
+import { useCachedState, withAccessToken } from "@raycast/utils";
+import type { BeeperDesktop } from "@beeper/desktop-api";
 import { useBeeperDesktop, createBeeperOAuth, focusApp } from "./api";
 
 function ListAccountsCommand() {
+  const [isShowingDetail, setIsShowingDetail] = useCachedState<boolean>("list-accounts:isShowingDetail", false);
   const {
-    data: _accounts,
+    data: accounts,
     isLoading,
     revalidate,
-  } = useBeeperDesktop(async (client) => {
+    error,
+  } = useBeeperDesktop<BeeperDesktop.Account[]>(async (client) => {
     const result = await client.accounts.list();
-    console.log("Fetched accounts:", JSON.stringify(result, null, 2));
-    return result.accounts;
+    return result;
   });
 
-  const accounts = _accounts || [];
-
   return (
-    <List isLoading={isLoading} navigationTitle="Beeper Accounts">
-      {accounts.map((account) => (
+    <List isLoading={isLoading} searchBarPlaceholder="Search accounts…" isShowingDetail={isShowingDetail}>
+      {accounts?.map((account) => (
         <List.Item
           key={account.accountID}
           icon={Icon.Person}
           title={account.user?.fullName || account.user?.username || "Unnamed Account"}
-          subtitle={account.network}
-          accessories={[
-            { text: account.user?.email || "" },
-            { icon: account.user?.isSelf ? Icon.Star : undefined },
-          ].filter(Boolean)}
+          subtitle={!isShowingDetail ? account.network : undefined}
+          detail={
+            isShowingDetail ? (
+              <List.Item.Detail
+                metadata={
+                  <List.Item.Detail.Metadata>
+                    <List.Item.Detail.Metadata.Label title="Account ID" text={account.accountID} />
+                    <List.Item.Detail.Metadata.Label title="Network" text={account.network || "N/A"} />
+                    <List.Item.Detail.Metadata.Separator />
+                    <List.Item.Detail.Metadata.Label title="User ID" text={account.user?.id || "N/A"} />
+                    <List.Item.Detail.Metadata.Label title="Username" text={account.user?.username || "N/A"} />
+                    <List.Item.Detail.Metadata.Label title="Email" text={account.user?.email || "N/A"} />
+                    <List.Item.Detail.Metadata.Label title="Phone Number" text={account.user?.phoneNumber || "N/A"} />
+                    {account.user?.isSelf && (
+                      <List.Item.Detail.Metadata.TagList title="Status">
+                        <List.Item.Detail.Metadata.TagList.Item text="Self" color={Color.Green} />
+                      </List.Item.Detail.Metadata.TagList>
+                    )}
+                  </List.Item.Detail.Metadata>
+                }
+              />
+            ) : undefined
+          }
+          accessories={
+            !isShowingDetail
+              ? [
+                  ...(account.user?.email ? ([{ text: account.user.email }] as const) : []),
+                  ...(account.user?.isSelf ? ([{ icon: Icon.Star, tooltip: "This is you" }] as const) : []),
+                ]
+              : []
+          }
           actions={
             <ActionPanel>
+              <Action
+                title="Focus Beeper Desktop"
+                icon={Icon.Window}
+                shortcut={Keyboard.Shortcut.Common.Open}
+                onAction={() => focusApp()}
+              />
+              <Action
+                title="Toggle Details"
+                shortcut={{ modifiers: ["cmd", "shift"], key: "d" }}
+                icon={Icon.AppWindowSidebarLeft}
+                onAction={() => setIsShowingDetail(!isShowingDetail)}
+              />
               <Action.Push
-                title="Show Details"
+                title="Show Details (Old)"
+                icon={Icon.Info}
                 target={
                   <Detail
                     markdown={`# ${account.user?.fullName || account.user?.username || "Account"}
@@ -47,24 +86,22 @@ function ListAccountsCommand() {
               <Action
                 title="Refresh"
                 icon={Icon.ArrowClockwise}
-                shortcut={{ modifiers: ["cmd"], key: "r" }}
+                shortcut={Keyboard.Shortcut.Common.Refresh}
                 onAction={() => revalidate()}
-              />
-              <Action
-                title="Focus Beeper Desktop"
-                icon={Icon.Window}
-                shortcut={{ modifiers: ["cmd"], key: "o" }}
-                onAction={() => focusApp()}
               />
             </ActionPanel>
           }
         />
       ))}
-      {!isLoading && accounts.length === 0 && (
+      {!isLoading && (accounts?.length ?? 0) === 0 && (
         <List.EmptyView
-          icon={Icon.Person}
-          title="No accounts found"
-          description="Make sure Beeper Desktop is running and you're authenticated"
+          icon={error ? Icon.Warning : Icon.Person}
+          title={error ? "Failed to Load Accounts" : "No Accounts Found"}
+          description={
+            error
+              ? "Could not load accounts. Make sure Beeper Desktop is running and the API is enabled, then try Refresh."
+              : "Make sure Beeper Desktop is running and you're authenticated"
+          }
         />
       )}
     </List>
