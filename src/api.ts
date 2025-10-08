@@ -63,8 +63,8 @@ export function getBeeperDesktop(): BeeperDesktop {
   return clientInstance;
 }
 
-export function useBeeperDesktop<T>(fn: (client: BeeperDesktop) => Promise<T>) {
-  return usePromise(async () => fn(getBeeperDesktop()));
+export function useBeeperDesktop<T>(fn: (client: BeeperDesktop) => Promise<T>, dependencies: unknown[] = []) {
+  return usePromise(async () => fn(getBeeperDesktop()), dependencies);
 }
 
 export const focusApp = async (params: AppFocusParams = {}) => {

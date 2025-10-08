@@ -37,7 +37,7 @@
     }
   ],
   "dependencies": {
-    "@beeper/desktop-api": "^0.1.4",
+    "@beeper/desktop-api": "file:../../../Primary/Projects/texts/desktop-api-js",
     "@raycast/api": "^1.102.6",
     "@raycast/utils": "^1.17.0"
   },
