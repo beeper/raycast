@@ -1,4 +1,4 @@
-import { ActionPanel, Action, List, Icon} from "@raycast/api";
+import { List, Icon} from "@raycast/api";
 import { withAccessToken } from "@raycast/utils";
 import { useState } from "react";
 import { createBeeperOAuth, focusApp } from "./api";
@@ -46,6 +46,7 @@ function SearchChatsCommand() {
         : (
             chats.map((chat) => (
               <ChatListItem
+                key={chat.id}
                 chat={{
                   ...chat,
                   onOpen: () => focusApp({ chatID: chat.id }),

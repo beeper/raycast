@@ -11,6 +11,6 @@ export function useChatSearch(searchText: string, includeEmpty = false) {
       }
       return allChats;
     },
-    [searchText]
+    [searchText, includeEmpty]
   );
 }

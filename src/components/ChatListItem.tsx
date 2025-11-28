@@ -1,9 +1,18 @@
 import { List, ActionPanel, Action, Icon } from "@raycast/api";
 import { getNetworkIcon } from "../network-icons";
+import { Translations } from "../locales/en";
+
+interface Chat {
+  id: string;
+  network: string;
+  title?: string;
+  onOpen?: () => void;
+  detailsTarget?: React.ReactNode;
+}
 
 interface ChatListItemProps {
-  chat: any;
-  translations: any;
+  chat: Chat;
+  translations: Translations;
   accessories?: Array<{ text?: string; icon?: any; date?: Date }>;
   showDetails?: boolean;
 }
