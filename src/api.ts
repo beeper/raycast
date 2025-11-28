@@ -1,7 +1,8 @@
 import BeeperDesktop from "@beeper/desktop-api";
-import type { AppFocusParams } from "@beeper/desktop-api/resources/app";
+import type { AppOpenParams } from "@beeper/desktop-api/resources/app";
 import { closeMainWindow, getPreferenceValues, OAuth, showHUD } from "@raycast/api";
 import { OAuthService, usePromise, getAccessToken } from "@raycast/utils";
+import { t } from "./locales";
 
 interface Preferences {
   baseURL?: string;
@@ -46,6 +47,11 @@ export function createBeeperOAuth() {
   });
 }
 
+/**
+ * Returns a cached BeeperDesktop client, creating a new instance when the configured base URL or access token has changed.
+ *
+ * @returns A BeeperDesktop client configured with the current base URL and access token.
+ */
 export function getBeeperDesktop(): BeeperDesktop {
   const baseURL = getBaseURL();
   const { token: accessToken } = getAccessToken();
@@ -63,17 +69,27 @@ export function getBeeperDesktop(): BeeperDesktop {
   return clientInstance;
 }
 
-export function useBeeperDesktop<T>(fn: (client: BeeperDesktop) => Promise<T>) {
-  return usePromise(async () => fn(getBeeperDesktop()));
+/**
+ * Execute an asynchronous operation using the current BeeperDesktop client and return its managed result.
+ *
+ * @param fn - Function that receives the current BeeperDesktop client and returns a promise for the desired value
+ * @param deps - Optional React dependency list that controls when the operation is re-run
+ * @returns The value produced by `fn` when executed with the current BeeperDesktop client; loading and error state are managed by the hook
+ */
+export function useBeeperDesktop<T>(fn: (client: BeeperDesktop) => Promise<T>, deps?: React.DependencyList) {
+  // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+  // @ts-ignore - usePromise type overload issue with optional deps
+  return usePromise(async () => fn(getBeeperDesktop()), deps);
 }
 
-export const focusApp = async (params: AppFocusParams = {}) => {
+export const focusApp = async (params: AppOpenParams = {}) => {
+  const translations = t();
   try {
-    await getBeeperDesktop().app.focus(params);
+    await getBeeperDesktop().app.open(params);
     await closeMainWindow();
-    await showHUD("Beeper Desktop focused");
+    await showHUD(translations.commands.focusApp.successMessage);
   } catch (error) {
     console.error("Failed to focus Beeper Desktop:", error);
-    await showHUD("Failed to focus Beeper Desktop");
+    await showHUD(translations.commands.focusApp.errorMessage);
   }
 };
