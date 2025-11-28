@@ -1,4 +1,4 @@
-import { ActionPanel, Action, List, Icon, Image } from "@raycast/api";
+import { ActionPanel, Action, List, Icon} from "@raycast/api";
 import { withAccessToken } from "@raycast/utils";
 import { useState } from "react";
 import { useBeeperDesktop, createBeeperOAuth, focusApp } from "./api";
@@ -38,46 +38,49 @@ function SearchChatsCommand() {
       onSearchTextChange={setSearchText}
       throttle
     >
-      {searchText === "" ? (
-        <List.EmptyView
-          icon={Icon.MagnifyingGlass}
-          title={translations.commands.searchChats.emptyTitle}
-          description={translations.commands.searchChats.emptyDescription}
-        />
-      ) : (
-        chats.map((chat) => (
-          <List.Item
-            key={chat.id}
-            icon={getNetworkIcon(chat.network)}
-            title={chat.title || translations.common.unnamedChat}
-            subtitle={chat.network}
-            accessories={[
-              ...(chat.unreadCount > 0
-                ? [{ text: translations.commands.unreadChats.unreadCount(chat.unreadCount) }]
-                : []),
-              ...(chat.isPinned ? [{ icon: Icon.Pin }] : []),
-              ...(chat.isMuted ? [{ icon: Icon.SpeakerOff }] : []),
-            ]}
-            actions={
-              <ActionPanel>
-                <Action
-                  title={translations.common.openInBeeper}
-                  icon={Icon.Window}
-                  onAction={() => focusApp({ chatID: chat.id })}
-                />
-                <Action.CopyToClipboard title={translations.common.copyChatId} content={chat.id} />
-              </ActionPanel>
-            }
-          />
-        ))
-      )}
-      {searchText !== "" && !isLoading && chats.length === 0 && (
-        <List.EmptyView
-          icon={Icon.Message}
-          title={translations.commands.searchChats.noResultsTitle}
-          description={translations.commands.searchChats.noResultsDescription}
-        />
-      )}
+      {searchText === ""
+        ? (
+            <List.EmptyView
+              icon={Icon.MagnifyingGlass}
+              title={translations.commands.searchChats.emptyTitle}
+              description={translations.commands.searchChats.emptyDescription}
+            />
+          )
+        : !isLoading && chats.length === 0
+        ? (
+            <List.EmptyView
+              icon={Icon.Message}
+              title={translations.commands.searchChats.noResultsTitle}
+              description={translations.commands.searchChats.noResultsDescription}
+            />
+          )
+        : (
+            chats.map((chat) => (
+              <List.Item
+                key={chat.id}
+                icon={getNetworkIcon(chat.network)}
+                title={chat.title || translations.common.unnamedChat}
+                subtitle={chat.network}
+                accessories={[
+                  ...(chat.unreadCount > 0
+                    ? [{ text: translations.commands.unreadChats.unreadCount(chat.unreadCount) }]
+                    : []),
+                  ...(chat.isPinned ? [{ icon: Icon.Pin }] : []),
+                  ...(chat.isMuted ? [{ icon: Icon.SpeakerOff }] : []),
+                ]}
+                actions={
+                  <ActionPanel>
+                    <Action
+                      title={translations.common.openInBeeper}
+                      icon={Icon.Window}
+                      onAction={() => focusApp({ chatID: chat.id })}
+                    />
+                    <Action.CopyToClipboard title={translations.common.copyChatId} content={chat.id} />
+                  </ActionPanel>
+                }
+              />
+            ))
+          )}
     </List>
   );
 }

@@ -60,7 +60,7 @@ export const cs: Translations = {
   // Common
   common: {
     unnamedChat: "Nepojmenovaný chat",
-      unknownError: "Došlo k neznámé chybě",
+    unknownError: "Došlo k neznámé chybě",
     openInBeeper: "Otevřít chat v Beeper",
     copyChatId: "Kopírovat ID chatu",
     showDetails: "Zobrazit detaily",

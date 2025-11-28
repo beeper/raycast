@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ActionPanel, Detail, List, Action, Icon, Image } from "@raycast/api";
+import { ActionPanel, Detail, List, Action, Icon} from "@raycast/api";
 import { withAccessToken } from "@raycast/utils";
 import { useBeeperDesktop, createBeeperOAuth, focusApp } from "./api";
 import { t } from "./locales";
