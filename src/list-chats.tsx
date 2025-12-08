@@ -3,27 +3,7 @@ import { ActionPanel, Detail, List, Action, Icon, Image } from "@raycast/api";
 import { withAccessToken } from "@raycast/utils";
 import { useBeeperDesktop, createBeeperOAuth, focusApp } from "./api";
 import { t } from "./locales";
-import { safeAvatarPath } from "./utils/avatar";
-import { getNetworkIcon } from "./utils/networkIcons";
-
-/**
- * Returns chat icon - contact avatar for DMs, network icon for groups.
- */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function getChatIcon(chat: any): Image.ImageLike {
-  // For 1:1 chats, try to get the other person's avatar
-  if (chat.type !== "group" && chat.participants?.items) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const otherParticipant = chat.participants.items.find((p: any) => !p.isSelf);
-    if (otherParticipant?.imgURL) {
-      const validatedPath = safeAvatarPath(otherParticipant.imgURL);
-      if (validatedPath) {
-        return { source: validatedPath, mask: Image.Mask.Circle };
-      }
-    }
-  }
-  return getNetworkIcon(chat.network);
-}
+import { getChatIcon } from "./utils/chatIcon";
 
 /**
  * Render a searchable list of Beeper chats with actions to open the chat in Beeper, view details, and copy the chat ID.

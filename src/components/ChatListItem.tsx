@@ -1,8 +1,7 @@
-import { List, ActionPanel, Action, Icon, Image } from "@raycast/api";
+import { List, ActionPanel, Action, Icon } from "@raycast/api";
 import type { ReactNode } from "react";
 import { Translations } from "../locales/en";
-import { safeAvatarPath } from "../utils/avatar";
-import { getNetworkIcon } from "../utils/networkIcons";
+import { getChatIcon } from "../utils/chatIcon";
 
 interface Chat {
   id: string;
@@ -18,16 +17,6 @@ interface ChatListItemProps {
   translations: Translations;
   accessories?: List.Item.Props["accessories"];
   showDetails?: boolean;
-}
-
-function getChatIcon(chat: Chat): Image.ImageLike {
-  if (chat.avatarUrl) {
-    const validatedPath = safeAvatarPath(chat.avatarUrl);
-    if (validatedPath) {
-      return { source: validatedPath, mask: Image.Mask.Circle };
-    }
-  }
-  return getNetworkIcon(chat.network);
 }
 
 export function ChatListItem({ chat, translations, accessories = [], showDetails = false }: ChatListItemProps) {
