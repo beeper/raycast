@@ -20,9 +20,33 @@
       "mode": "no-view"
     },
     {
-      "name": "find-chat",
-      "title": "Find Chat",
-      "description": "Find chats from Beeper Desktop",
+      "name": "list-chats",
+      "title": "List Chats",
+      "description": "List all your Beeper chats",
+      "mode": "view"
+    },
+    {
+      "name": "search-chats",
+      "title": "Search Chats",
+      "description": "Search through your Beeper chats",
+      "mode": "view"
+    },
+    {
+      "name": "unread-chats",
+      "title": "Unread Chats",
+      "description": "View all chats with unread messages",
+      "mode": "view"
+    },
+    {
+      "name": "send-message",
+      "title": "Send Message",
+      "description": "Quickly send a message to any chat",
+      "mode": "view"
+    },
+    {
+      "name": "search-messages",
+      "title": "Search Messages",
+      "description": "Search through your Beeper messages",
       "mode": "view"
     }
   ],
@@ -34,6 +58,24 @@
       "type": "textfield",
       "required": false,
       "default": "http://localhost:23373"
+    },
+    {
+      "name": "language",
+      "title": "Language",
+      "description": "Select the extension language",
+      "type": "dropdown",
+      "required": false,
+      "default": "en",
+      "data": [
+        {
+          "title": "English",
+          "value": "en"
+        },
+        {
+          "title": "Čeština",
+          "value": "cs"
+        }
+      ]
     }
   ],
   "dependencies": {
@@ -47,6 +89,7 @@
     "@types/react": "19.0.10",
     "eslint": "^9.22.0",
     "prettier": "^3.5.3",
+    "simple-icons": "^15.22.0",
     "typescript": "^5.8.2"
   },
   "scripts": {

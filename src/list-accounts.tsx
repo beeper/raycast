@@ -1,16 +1,24 @@
 import { ActionPanel, Detail, List, Action, Icon, Keyboard, Color } from "@raycast/api";
 import { useCachedState, withAccessToken } from "@raycast/utils";
-import type { BeeperDesktop } from "@beeper/desktop-api";
 import { useBeeperDesktop, createBeeperOAuth, focusApp } from "./api";
+import { t } from "./locales";
 
+/**
+ * Render a searchable list of Beeper Desktop accounts with an optional inline detail pane.
+ *
+ * Displays accounts fetched from Beeper Desktop and provides actions to focus the app, toggle the inline details pane, open a legacy detail view, and refresh the list. When no accounts are available an appropriate empty view is shown.
+ *
+ * @returns A Raycast List component populated with account items and an empty-state view when no accounts exist
+ */
 function ListAccountsCommand() {
+  const translations = t();
   const [isShowingDetail, setIsShowingDetail] = useCachedState<boolean>("list-accounts:isShowingDetail", false);
   const {
     data: accounts,
     isLoading,
     revalidate,
     error,
-  } = useBeeperDesktop<BeeperDesktop.Account[]>(async (client) => {
+  } = useBeeperDesktop(async (client) => {
     const result = await client.accounts.list();
     return result;
   });
@@ -21,7 +29,7 @@ function ListAccountsCommand() {
         <List.Item
           key={account.accountID}
           icon={Icon.Person}
-          title={account.user?.fullName || account.user?.username || "Unnamed Account"}
+          title={account.user?.fullName || account.user?.username || translations.common.unnamedChat}
           subtitle={!isShowingDetail ? account.network : undefined}
           detail={
             isShowingDetail ? (
@@ -96,12 +104,8 @@ function ListAccountsCommand() {
       {!isLoading && (accounts?.length ?? 0) === 0 && (
         <List.EmptyView
           icon={error ? Icon.Warning : Icon.Person}
-          title={error ? "Failed to Load Accounts" : "No Accounts Found"}
-          description={
-            error
-              ? "Could not load accounts. Make sure Beeper Desktop is running and the API is enabled, then try Refresh."
-              : "Make sure Beeper Desktop is running and you're authenticated"
-          }
+          title={translations.commands.listAccounts.emptyTitle}
+          description={translations.commands.listAccounts.emptyDescription}
         />
       )}
     </List>
