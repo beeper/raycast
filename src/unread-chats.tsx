@@ -21,12 +21,25 @@ function UnreadChatsCommand() {
     error,
   } = useBeeperDesktop(async (client) => {
     const allChats = [];
-    for await (const chat of client.chats.search({})) {
-      // Filter only chats with unread messages
-      if (chat.unreadCount > 0) {
-        allChats.push(chat);
-      }
+    let cursor: string | null = null;
+    let hasMore = true;
+    const MAX_PAGES = 20; // Safety limit to prevent infinite loops
+    let pageCount = 0;
+
+    // Use API's native unreadOnly filter instead of client-side filtering
+    while (hasMore && pageCount < MAX_PAGES) {
+      const searchParams = cursor
+        ? { unreadOnly: true, limit: 50, cursor, direction: "older" as const }
+        : { unreadOnly: true, limit: 50 };
+
+      const page = await client.chats.search(searchParams);
+      allChats.push(...page.items);
+
+      cursor = page.oldestCursor;
+      hasMore = page.hasMore;
+      pageCount++;
     }
+
     // Sort by unread count (highest first)
     return allChats.sort((a, b) => b.unreadCount - a.unreadCount);
   });

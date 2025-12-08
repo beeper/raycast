@@ -13,7 +13,7 @@ import { useChatSearch } from "./hooks/useChatSearch";
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function getAvatarUrl(chat: any): string | undefined {
   // Only show avatar for 1:1 chats, not groups
-  if (chat.type !== "group" && chat.participants?.items) {
+  if (chat.type !== "group" && chat.participants?.items && Array.isArray(chat.participants.items)) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const otherParticipant = chat.participants.items.find((p: any) => !p.isSelf);
     return otherParticipant?.imgURL;

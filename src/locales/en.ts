@@ -14,6 +14,11 @@ export const en = {
       searchPlaceholder: "Filter chats...",
       emptyTitle: "No chats found",
       emptyDescription: "Try adjusting your search or make sure Beeper Desktop is running",
+      loadMoreError: "Failed to Load More Chats",
+      loadMoreErrorMessage: "Please try again",
+      loading: "Loading...",
+      loadMoreChats: "Load More Chats",
+      loadMoreAction: "Load More",
     },
     searchChats: {
       title: "Search Chats",

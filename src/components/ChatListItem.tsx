@@ -8,7 +8,7 @@ interface Chat {
   network: string;
   type?: string;
   participants?: {
-    items?: Array<{ isSelf: boolean; imgURL?: string }>;
+    items?: Array<{ isSelf?: boolean; imgURL?: string }>;
   };
   title?: string;
   avatarUrl?: string;

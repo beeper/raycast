@@ -16,6 +16,11 @@ export const cs: Translations = {
       searchPlaceholder: "Filtrovat chaty...",
       emptyTitle: "Žádné chaty nenalezeny",
       emptyDescription: "Zkuste upravit hledání nebo se ujistěte, že Beeper Desktop běží",
+      loadMoreError: "Nepodařilo se načíst další chaty",
+      loadMoreErrorMessage: "Zkuste to prosím znovu",
+      loading: "Načítání...",
+      loadMoreChats: "Načíst další chaty",
+      loadMoreAction: "Načíst další",
     },
     searchChats: {
       title: "Hledat chaty",
