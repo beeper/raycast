@@ -1,5 +1,4 @@
 import BeeperDesktop from "@beeper/desktop-api";
-import type { AppFocusParams } from "@beeper/desktop-api/resources/app";
 import { closeMainWindow, getPreferenceValues, OAuth, showHUD } from "@raycast/api";
 import { OAuthService, usePromise, getAccessToken } from "@raycast/utils";
 
@@ -67,9 +66,9 @@ export function useBeeperDesktop<T>(fn: (client: BeeperDesktop) => Promise<T>) {
   return usePromise(async () => fn(getBeeperDesktop()));
 }
 
-export const focusApp = async (params: AppFocusParams = {}) => {
+export const focusApp = async (params = {}) => {
   try {
-    await getBeeperDesktop().app.focus(params);
+    await getBeeperDesktop().focus(params);
     await closeMainWindow();
     await showHUD("Beeper Desktop focused");
   } catch (error) {
