@@ -10,14 +10,14 @@ function ListChatsCommand() {
   } = useBeeperDesktop(async (client) => {
     const result = await client.chats.search();
     console.log("Fetched accounts:", JSON.stringify(result, null, 2));
-    return result.data;
+    return result.items || [];
   });
 
   return (
     <List isLoading={isLoading} navigationTitle="Beeper Chats">
       {(chats || []).map((chat) => (
         <List.Item
-          key={chat.chatID}
+          key={chat.id}
           icon={Icon.Person}
           title={chat.title || "Unnamed Chat"}
           subtitle={chat.network}
@@ -35,7 +35,7 @@ function ListChatsCommand() {
                   <Detail
                     markdown={`# ${chat.title || "Chat"}
 
-**Chat ID:** ${chat.chatID}
+**Chat ID:** ${chat.id}
 **Account ID:** ${chat.accountID}
 **Network:** ${chat.network}
 **Type:** ${chat.type}

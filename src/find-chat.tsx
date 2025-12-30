@@ -6,15 +6,16 @@ import { useBeeperDesktop, createBeeperOAuth, focusApp } from "./api";
 function FindChatCommand() {
   const [searchText, setSearchText] = useState("");
   const { data: chats = [], isLoading } = useBeeperDesktop(async (client) => {
-    const result = await client.chats.search({ query: searchText });
-    return result.data;
+    const params = searchText.trim() === "" ? {} : { query: searchText };
+    const result = await client.chats.search(params);
+    return result.items || [];
   });
 
   return (
     <List isLoading={isLoading} searchBarPlaceholder="Search chats..." onSearchTextChange={setSearchText} throttle>
       {chats.map((chat) => (
         <List.Item
-          key={chat.chatID}
+          key={chat.id}
           icon={Icon.Message}
           title={chat.title || "Unnamed Chat"}
           subtitle={chat.network}
@@ -28,9 +29,9 @@ function FindChatCommand() {
               <Action
                 title="Open Chat in Beeper"
                 icon={Icon.Window}
-                onAction={() => focusApp({ chatID: chat.chatID })}
+                onAction={() => focusApp({ chatID: chat.id })}
               />
-              <Action.CopyToClipboard title="Copy Chat ID" content={chat.chatID} />
+              <Action.CopyToClipboard title="Copy Chat ID" content={chat.id} />
             </ActionPanel>
           }
         />
