@@ -5,7 +5,23 @@
   "description": "Access your chats from Beeper Desktop (requires Beeper Desktop API to be enabled)",
   "icon": "extension-icon.png",
   "author": "batuhan",
+  "contributors": [
+    "pernielsentikaer",
+    "clins1994"
+  ],
   "license": "MIT",
+  "platforms": [
+    "macOS"
+  ],
+  "keywords": [
+    "beeper",
+    "chat",
+    "messaging",
+    "matrix"
+  ],
+  "categories": [
+    "Communication"
+  ],
   "commands": [
     {
       "name": "list-accounts",
