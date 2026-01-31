@@ -7,7 +7,7 @@ function SearchChatsCommand() {
   const [searchText, setSearchText] = useState("");
   const { data: chats = [], isLoading } = useBeeperDesktop(async (client) => {
     const result = await client.chats.search({ query: searchText });
-    return result.data;
+    return result.items || [];
   });
 
   return (
@@ -29,7 +29,7 @@ function SearchChatsCommand() {
                   <Detail
                     markdown={`# ${chat.title}
 
-**ID:** ${chat.chatID}
+**ID:** ${chat.id}
 **Account ID:** ${chat.accountID}
 **Network:** ${chat.network}
 **Type:** ${chat.type}
