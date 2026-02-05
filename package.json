@@ -24,21 +24,33 @@
   ],
   "commands": [
     {
-      "name": "list-accounts",
-      "title": "List Accounts",
-      "description": "List all connected Beeper accounts",
+      "name": "chat",
+      "title": "Recent Chats",
+      "description": "Browse recent chats from Beeper Desktop",
       "mode": "view"
     },
     {
       "name": "focus-app",
-      "title": "Focus Beeper Desktop",
-      "description": "Bring Beeper Desktop to the foreground",
+      "title": "Open Beeper",
+      "description": "Bring Beeper to the foreground",
       "mode": "no-view"
     },
     {
-      "name": "find-chat",
-      "title": "Find Chat",
-      "description": "Find chats from Beeper Desktop",
+      "name": "unread-chats",
+      "title": "Unread Chats",
+      "description": "See unread chats from Beeper Desktop",
+      "mode": "view"
+    },
+    {
+      "name": "contacts",
+      "title": "Contacts",
+      "description": "Search contacts across connected Beeper accounts",
+      "mode": "view"
+    },
+    {
+      "name": "search-messages",
+      "title": "Search Recent Messages",
+      "description": "Search recent messages across Beeper chats",
       "mode": "view"
     }
   ],
@@ -53,9 +65,10 @@
     }
   ],
   "dependencies": {
-    "@beeper/desktop-api": "^4.2.3",
+    "@beeper/desktop-api": "latest",
     "@raycast/api": "^1.104.1",
-    "@raycast/utils": "^2.2.2"
+    "@raycast/utils": "^2.2.2",
+    "fuse.js": "^7.1.0"
   },
   "devDependencies": {
     "@raycast/eslint-config": "^2.1.1",

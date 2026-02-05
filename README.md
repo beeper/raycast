@@ -4,6 +4,14 @@
 
 Manage Beeper Desktop with Raycast. Uses the [Beeper Desktop API TypeScript SDK](https://developers.beeper.com/desktop-api-reference/typescript/) with PKCE authentication.
 
+## Commands
+
+- **Recent Chats**: Browse recent chats, open in Beeper Desktop, reply/edit, set reminders, archive, and upload/download attachments.
+- **Unread Chats**: Focus on chats with unread messages.
+- **Contacts**: Search contacts across connected accounts and start chats.
+- **Search Recent Messages**: Search messages across chats with sender/attachment/date filters.
+- **Open Beeper**: Bring Beeper to the foreground.
+
 ## Prerequisites
 
 Before using this extension, you **must enable the Beeper Desktop API** in your Beeper Desktop settings:
