@@ -29,20 +29,21 @@ const getBaseURL = () => {
   return preferences.baseUrl || "http://localhost:23373";
 };
 
-const normalizeBaseURL = (baseURL: string) => baseURL.replace(/\/+$/, "");
+const RAYCAST_EXTENSION_AUTHOR = "batuhan";
+const RAYCAST_EXTENSION_NAME = "beeper";
+const RAYCAST_FOCUS_COMMAND = "focus-app";
 
-export const getOpenLinkURL = (localChatIDOrChatID: string, messageSortKey?: string) => {
-  const baseURL = normalizeBaseURL(getBaseURL());
-  const encodedChatID = encodeURIComponent(localChatIDOrChatID);
-  const encodedMessage = messageSortKey ? `/${encodeURIComponent(messageSortKey)}` : "";
-  return `${baseURL}/open/${encodedChatID}${encodedMessage}`;
+export const getRaycastFocusLink = (
+  params: {
+    chatID?: string;
+    draftText?: string;
+    draftAttachmentPath?: string;
+    messageID?: string;
+  } = {},
+) => {
+  const args = Object.keys(params).length > 0 ? `?arguments=${encodeURIComponent(JSON.stringify(params))}` : "";
+  return `raycast://extensions/${RAYCAST_EXTENSION_AUTHOR}/${RAYCAST_EXTENSION_NAME}/${RAYCAST_FOCUS_COMMAND}${args}`;
 };
-
-export const getChatOpenLink = (chat: { localChatID?: string | null; id: string }) =>
-  getOpenLinkURL(chat.localChatID ?? chat.id);
-
-export const getMessageOpenLink = (chat: { localChatID?: string | null; id: string }, messageSortKey?: string) =>
-  messageSortKey ? getOpenLinkURL(chat.localChatID ?? chat.id, messageSortKey) : undefined;
 
 export function createBeeperOAuth() {
   const baseURL = getBaseURL();

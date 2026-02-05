@@ -30,8 +30,7 @@ import {
   searchMessages,
   sendMessage,
   updateMessage,
-  getChatOpenLink,
-  getMessageOpenLink,
+  getRaycastFocusLink,
   useBeeperDesktop,
 } from "./api";
 
@@ -621,7 +620,7 @@ export function ChatListView({
 
   const renderChatItem = (chat: BeeperDesktop.Chat) => {
     const lastActivity = parseDate(chat.lastActivity);
-    const openLink = getChatOpenLink(chat);
+    const openLink = getRaycastFocusLink({ chatID: chat.id });
     const accessories = [
       ...(chat.unreadCount > 0 ? [{ text: `${chat.unreadCount} unread` }] : []),
       ...(chat.isPinned ? [{ icon: Icon.Pin }] : []),
@@ -978,7 +977,7 @@ function MessageActions({
   isShowingDetail: boolean;
 }) {
   const messageID = getMessageID(message);
-  const messageLink = getMessageOpenLink(chat, message.sortKey);
+  const messageLink = getRaycastFocusLink({ chatID: chat.id, messageID });
 
   return (
     <ActionPanel>

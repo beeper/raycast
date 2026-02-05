@@ -15,7 +15,14 @@ import { existsSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { createBeeperOAuth, focusApp, retrieveChat, getOpenLinkURL, searchMessages, useBeeperDesktop } from "./api";
+import {
+  createBeeperOAuth,
+  focusApp,
+  retrieveChat,
+  getRaycastFocusLink,
+  searchMessages,
+  useBeeperDesktop,
+} from "./api";
 import { ChatThread, ComposeMessageForm } from "./chat";
 
 type SenderFilter = "any" | "me" | "others";
@@ -157,10 +164,7 @@ function SearchMessagesCommand(props: LaunchProps<{ launchContext?: SearchMessag
         const sender = message.senderName || (message.isSender ? "You" : "Unknown");
         const subtitle = chatTitle ? `${chatTitle} • ${sender}` : sender;
         const messageID = getMessageID(message);
-        const messageLink =
-          message.sortKey && (chatInfo?.localChatID || message.chatID)
-            ? getOpenLinkURL(chatInfo?.localChatID || message.chatID, message.sortKey)
-            : undefined;
+        const messageLink = getRaycastFocusLink({ chatID: message.chatID, messageID });
 
         return (
           <List.Item
