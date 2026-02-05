@@ -23,7 +23,12 @@ function ListChatsAllCommand() {
       }
 
       const result = await client.chats.list(params);
-      return result.data;
+      // Collect all items from the cursor
+      const items = [];
+      for await (const item of result) {
+        items.push(item);
+      }
+      return items;
     },
     [refreshTrigger, accountFilter],
   );
@@ -104,7 +109,7 @@ function ListChatsAllCommand() {
                       title="Participants"
                       text={`${chat.participants.total} (showing ${chat.participants.items.length})`}
                     />
-                    {chat.participants.items.slice(0, 5).map((participant, idx) => (
+                    {chat.participants.items.slice(0, 5).map((participant: any, idx: number) => (
                       <List.Item.Detail.Metadata.Label
                         key={idx}
                         title={`  ${participant.fullName || participant.username || "Unknown"}`}

@@ -26,7 +26,12 @@ function SearchMessagesCommand() {
     }
 
     const result = await client.messages.search(params);
-    return result.data;
+    // Collect all items from the cursor
+    const items = [];
+    for await (const item of result) {
+      items.push(item);
+    }
+    return items;
   });
 
   return (

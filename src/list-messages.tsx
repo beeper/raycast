@@ -65,7 +65,12 @@ function ListMessagesCommand() {
       if (!chatID) return [];
 
       const result = await client.messages.list({ chatID, limit: 100 });
-      return result.data;
+      // Collect all items from the cursor
+      const items = [];
+      for await (const item of result) {
+        items.push(item);
+      }
+      return items;
     },
     [refreshTrigger],
   );

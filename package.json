@@ -8,9 +8,57 @@
   "license": "MIT",
   "commands": [
     {
+      "name": "global-search",
+      "title": "Global Search",
+      "description": "Search across all chats, groups, and messages",
+      "mode": "view"
+    },
+    {
+      "name": "find-chat",
+      "title": "Find Chat",
+      "description": "Search and find chats from Beeper Desktop",
+      "mode": "view"
+    },
+    {
+      "name": "list-chats-all",
+      "title": "List All Chats",
+      "description": "List all chats with details and preview",
+      "mode": "view"
+    },
+    {
       "name": "list-accounts",
       "title": "List Accounts",
       "description": "List all connected Beeper accounts",
+      "mode": "view"
+    },
+    {
+      "name": "search-messages",
+      "title": "Search Messages",
+      "description": "Search for messages across all chats",
+      "mode": "view"
+    },
+    {
+      "name": "list-messages",
+      "title": "List Messages in Chat",
+      "description": "List all messages in a specific chat",
+      "mode": "view"
+    },
+    {
+      "name": "send-message",
+      "title": "Send Message",
+      "description": "Send a message to a chat",
+      "mode": "view"
+    },
+    {
+      "name": "create-chat",
+      "title": "Create Chat",
+      "description": "Create a new single or group chat",
+      "mode": "view"
+    },
+    {
+      "name": "search-contacts",
+      "title": "Search Contacts",
+      "description": "Search for contacts on an account",
       "mode": "view"
     },
     {
@@ -18,12 +66,6 @@
       "title": "Focus Beeper Desktop",
       "description": "Bring Beeper Desktop to the foreground",
       "mode": "no-view"
-    },
-    {
-      "name": "find-chat",
-      "title": "Find Chat",
-      "description": "Find chats from Beeper Desktop",
-      "mode": "view"
     }
   ],
   "preferences": [
@@ -37,7 +79,7 @@
     }
   ],
   "dependencies": {
-    "@beeper/desktop-api": "file:../../../Primary/Projects/texts/desktop-api-js",
+    "@beeper/desktop-api": "file:/Users/batuhan/Primary/Projects/texts/desktop-api-js/dist",
     "@raycast/api": "^1.102.6",
     "@raycast/utils": "^1.17.0"
   },
