@@ -70,11 +70,14 @@ type ChatIndexState = {
 };
 
 const INDEXED_INBOXES: ChatInbox[] = ["primary", "low-priority", "archive"];
-const MAX_INDEXD_CHATS_TARGET = 20000;
-const INDEX_PAGE_LIMIT = 200;
-const INDEX_MAX_PAGES = 50;
-const INDEX_MAX_PAGES_INCREMENTAL = 3;
+const MAX_INDEXD_CHATS_TARGET = 3000;
+const INDEX_PAGE_LIMIT = 50;
+const INDEX_MAX_PAGES = 10;
+const INDEX_MAX_PAGES_INCREMENTAL = 2;
 const INDEX_REFRESH_MAX_AGE_MS = 6 * 60 * 60 * 1000;
+const MAX_PARTICIPANTS_INDEXED = 10;
+const MAX_PARTICIPANTS_STORED = 0;
+const MAX_INDEXED_CHATS_PER_INBOX = Math.ceil(MAX_INDEXD_CHATS_TARGET / INDEXED_INBOXES.length);
 
 const emptyCursors: ChatIndexState["cursors"] = {
   primary: { newestCursor: null, oldestCursor: null },
@@ -111,13 +114,47 @@ const mergeIndexedChats = (base: IndexedChat[], updates: IndexedChat[]) => {
   return Array.from(map.values());
 };
 
+const summarizeChatForIndex = (chat: BeeperDesktop.Chat): BeeperDesktop.Chat => ({
+  id: chat.id,
+  accountID: chat.accountID,
+  network: chat.network ?? "",
+  participants: {
+    hasMore: false,
+    items:
+      MAX_PARTICIPANTS_STORED > 0 ? (chat.participants?.items ?? []).slice(0, MAX_PARTICIPANTS_STORED) : [],
+    total: chat.participants?.total ?? 0,
+  },
+  type: chat.type,
+  unreadCount: chat.unreadCount ?? 0,
+  description: chat.description ?? undefined,
+  isArchived: chat.isArchived ?? false,
+  isMuted: chat.isMuted ?? false,
+  isPinned: chat.isPinned ?? false,
+  lastActivity: chat.lastActivity ?? undefined,
+  lastReadMessageSortKey: chat.lastReadMessageSortKey ?? undefined,
+  localChatID: chat.localChatID ?? null,
+  title: chat.title ?? null,
+});
+
 const normalizeIndexState = (state: ChatIndexState): ChatIndexState => {
   let changed = false;
-  const items = state.items.map((item) => {
-    if (item.searchFields) return item;
-    changed = true;
-    return { ...item, searchFields: buildSearchFields(item.chat) };
+  let items = state.items.map((item) => {
+    let next = item;
+    if (!next.searchFields) {
+      next = { ...next, searchFields: buildSearchFields(next.chat) };
+      changed = true;
+    }
+    const summarizedChat = summarizeChatForIndex(next.chat);
+    if (summarizedChat !== next.chat) {
+      next = { ...next, chat: summarizedChat };
+      changed = true;
+    }
+    return next;
   });
+  if (items.length > MAX_INDEXD_CHATS_TARGET) {
+    items = sortIndexedChatsByActivity(items).slice(0, MAX_INDEXD_CHATS_TARGET);
+    changed = true;
+  }
   return changed ? { ...state, items } : state;
 };
 
@@ -256,7 +293,7 @@ const buildSearchFields = (chat: BeeperDesktop.Chat): ChatSearchFields => {
   const network = normalizeSearchValue(chat.network || "");
   const participants =
     chat.participants?.items
-      ?.slice(0, 50)
+      ?.slice(0, MAX_PARTICIPANTS_INDEXED)
       .map((participant) => {
         const values = [
           participant.fullName,
@@ -299,7 +336,7 @@ export function ChatListView({
   );
   const { setValue: setLastChatID } = useLocalStorage<string | null>(`${stateKey}:last-id`, null);
   const { value: indexStateRaw = defaultIndexState, setValue: setIndexState } = useLocalStorage<ChatIndexState>(
-    `${stateKey}:index`,
+    `${stateKey}:index:v2`,
     defaultIndexState,
   );
 
@@ -320,9 +357,16 @@ export function ChatListView({
     inbox: ChatInbox,
     mode: "full" | "incremental",
     cursors: ChatIndexState["cursors"][ChatInbox],
+    onPage?: (payload: {
+      items: IndexedChat[];
+      newestCursor?: string | null;
+      oldestCursor?: string | null;
+      done: boolean;
+    }) => void | Promise<void>,
   ) => {
     const maxPages = mode === "incremental" ? INDEX_MAX_PAGES_INCREMENTAL : INDEX_MAX_PAGES;
     const items: IndexedChat[] = [];
+    let itemsCount = 0;
     let cursor: string | null | undefined = undefined;
     let newestCursor = cursors?.newestCursor ?? null;
     let oldestCursor = cursors?.oldestCursor ?? null;
@@ -343,9 +387,29 @@ export function ChatListView({
       if (response.oldestCursor) {
         oldestCursor = response.oldestCursor;
       }
-      items.push(...pageItems.map((chat) => ({ chat, inbox, searchFields: buildSearchFields(chat) })));
+      if (pageItems.length === 0) break;
+      const mapped = pageItems.map((chat) => ({
+        chat: summarizeChatForIndex(chat),
+        inbox,
+        searchFields: buildSearchFields(chat),
+      }));
+      itemsCount += mapped.length;
+      if (!onPage) {
+        items.push(...mapped);
+      }
 
-      if (mode === "incremental" || !response.hasMore) break;
+      const reachedLimit = itemsCount >= MAX_INDEXED_CHATS_PER_INBOX;
+      const done = reachedLimit || mode === "incremental" || !response.hasMore;
+      if (onPage) {
+        await onPage({
+          items: mapped,
+          newestCursor,
+          oldestCursor,
+          done,
+        });
+      }
+
+      if (done) break;
       const nextCursor = response.oldestCursor ?? response.nextCursor ?? response.cursor;
       if (!nextCursor) break;
       cursor = nextCursor;
@@ -372,15 +436,31 @@ export function ChatListView({
     };
 
     try {
-      const results = await Promise.all(INDEXED_INBOXES.map((inbox) => fetchInbox(inbox, mode, base.cursors[inbox])));
-      results.forEach((result, idx) => {
-        const inbox = INDEXED_INBOXES[idx];
-        nextState.items = mergeIndexedChats(nextState.items, result.items);
+      let lastPersist = 0;
+      const persistIfNeeded = async (force = false) => {
+        const now = Date.now();
+        if (!force && now - lastPersist < 250) return;
+        lastPersist = now;
+        await setIndexState({ ...nextState, updatedAt: now });
+      };
+
+      for (const inbox of INDEXED_INBOXES) {
+        const result = await fetchInbox(inbox, mode, base.cursors[inbox], async (page) => {
+          nextState.items = mergeIndexedChats(nextState.items, page.items);
+          nextState.cursors[inbox] = {
+            newestCursor: page.newestCursor ?? nextState.cursors[inbox].newestCursor ?? null,
+            oldestCursor: page.oldestCursor ?? nextState.cursors[inbox].oldestCursor ?? null,
+          };
+          if (nextState.items.length > MAX_INDEXD_CHATS_TARGET * 2) {
+            nextState.items = sortIndexedChatsByActivity(nextState.items).slice(0, MAX_INDEXD_CHATS_TARGET);
+          }
+          await persistIfNeeded(page.done);
+        });
         nextState.cursors[inbox] = {
           newestCursor: result.newestCursor ?? nextState.cursors[inbox].newestCursor ?? null,
           oldestCursor: result.oldestCursor ?? nextState.cursors[inbox].oldestCursor ?? null,
         };
-      });
+      }
 
       nextState.items = sortIndexedChatsByActivity(nextState.items).slice(0, MAX_INDEXD_CHATS_TARGET);
       nextState.updatedAt = Date.now();
@@ -407,9 +487,10 @@ export function ChatListView({
   const tokens = useMemo(() => parseSearchTerms(trimmedQuery), [trimmedQuery]);
   const normalizedQuery = useMemo(() => normalizeSearchValue(trimmedQuery), [trimmedQuery]);
   const searchIndex = useMemo(() => {
+    if (tokens.length === 0) return null;
     const collection = indexState.items.map((item) => ({ id: item.chat.id, searchFields: item.searchFields }));
     return new ThreadSearchIndex(collection);
-  }, [indexState.items]);
+  }, [indexState.items, tokens.length]);
   const chats = useMemo(() => {
     const filtered = indexState.items.filter((item) => {
       if (filters.inbox !== "all" && item.inbox !== filters.inbox) return false;
@@ -424,7 +505,7 @@ export function ChatListView({
 
     const now = Date.now();
     const filteredById = new Map(filtered.map((item) => [item.chat.id, item]));
-    const results = searchIndex.search(trimmedQuery, ["title", "network", "participants"]);
+    const results = searchIndex ? searchIndex.search(trimmedQuery, ["title", "network", "participants"]) : [];
     const scored = results
       .map((result) => {
         const indexed = filteredById.get(result.id);
