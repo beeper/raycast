@@ -690,15 +690,14 @@ export function ChatListView({
     [frecencyChats, pinnedIDs, unreadIDs, recentIDs],
   );
 
+  const showSections = showSmartSections && trimmedQuery.length === 0;
+
   const otherChats = chats.filter(
     (chat) =>
       !pinnedIDs.has(chat.id) &&
       !unreadIDs.has(chat.id) &&
-      !recentIDs.has(chat.id) &&
-      !frequentChats.some((item) => item.id === chat.id),
+      (!showSections || (!recentIDs.has(chat.id) && !frequentChats.some((item) => item.id === chat.id))),
   );
-
-  const showSections = showSmartSections && trimmedQuery.length === 0;
   const showUnread = showUnreadSection && unreadChats.length > 0;
 
   const renderChatItem = (chat: BeeperDesktop.Chat) => {
