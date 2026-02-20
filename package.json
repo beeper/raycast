@@ -94,6 +94,9 @@
     "prettier": "^3.7.4",
     "typescript": "^5.9.3"
   },
+  "overrides": {
+    "minimatch": ">=10.2.1"
+  },
   "scripts": {
     "build": "ray build",
     "dev": "ray develop",
