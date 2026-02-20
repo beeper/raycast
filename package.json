@@ -59,6 +59,12 @@
       "title": "Connected Accounts",
       "description": "View all connected messaging services",
       "mode": "view"
+    },
+    {
+      "name": "send-message",
+      "title": "Send Message",
+      "description": "Search for a chat and send a message",
+      "mode": "view"
     }
   ],
   "preferences": [

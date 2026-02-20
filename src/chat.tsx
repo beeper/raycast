@@ -17,7 +17,7 @@ import {
 import { useCachedState, useFrecencySorting, useForm, useLocalStorage, withAccessToken } from "@raycast/utils";
 import BeeperDesktop from "@beeper/desktop-api";
 import Fuse, { type Expression } from "fuse.js";
-import { type ComponentProps, useEffect, useMemo, useRef, useState } from "react";
+import { type ComponentProps, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   archiveChat,
   createBeeperOAuth,
@@ -34,10 +34,14 @@ import {
   useBeeperDesktop,
 } from "./api";
 
-type InboxFilter = "all" | "inbox" | "primary" | "low-priority" | "archive";
-type ChatTypeFilter = "any" | "single" | "group";
+export type InboxFilter = "all" | "inbox" | "primary" | "low-priority" | "archive";
+export type ChatTypeFilter = "any" | "single" | "group";
 
-interface ChatFilters {
+/** Maps the UI inbox filter value to the API's inbox parameter. */
+export const toApiInbox = (inbox: InboxFilter): "primary" | "low-priority" | "archive" | undefined =>
+  inbox === "all" ? undefined : inbox === "inbox" ? "primary" : inbox;
+
+export interface ChatFilters {
   inbox: InboxFilter;
   type: ChatTypeFilter;
   unreadOnly: boolean;
@@ -45,7 +49,7 @@ interface ChatFilters {
 }
 
 const recentDefaultFilters: ChatFilters = {
-  inbox: "primary",
+  inbox: "inbox",
   type: "any",
   unreadOnly: false,
   includeMuted: true,
@@ -61,15 +65,15 @@ const getErrorMessage = (error: unknown) => (error instanceof Error ? error.mess
 
 const getMessageID = (message: BeeperDesktop.Message & { messageID?: string }) => message.messageID ?? message.id;
 
-type ChatInbox = "primary" | "low-priority" | "archive";
-type IndexedChat = { chat: BeeperDesktop.Chat; inbox: ChatInbox; searchFields: ChatSearchFields };
-type ChatIndexState = {
+export type ChatInbox = "inbox" | "low-priority" | "archive";
+export type IndexedChat = { chat: BeeperDesktop.Chat; inbox: ChatInbox; searchFields: ChatSearchFields };
+export type ChatIndexState = {
   items: IndexedChat[];
   cursors: Record<ChatInbox, { newestCursor?: string | null; oldestCursor?: string | null }>;
   updatedAt: number;
 };
 
-const INDEXED_INBOXES: ChatInbox[] = ["primary", "low-priority", "archive"];
+const INDEXED_INBOXES: ChatInbox[] = ["inbox", "low-priority", "archive"];
 const MAX_INDEXD_CHATS_TARGET = 3000;
 const INDEX_PAGE_LIMIT = 50;
 const INDEX_MAX_PAGES = 10;
@@ -80,12 +84,12 @@ const MAX_PARTICIPANTS_STORED = 0;
 const MAX_INDEXED_CHATS_PER_INBOX = Math.ceil(MAX_INDEXD_CHATS_TARGET / INDEXED_INBOXES.length);
 
 const emptyCursors: ChatIndexState["cursors"] = {
-  primary: { newestCursor: null, oldestCursor: null },
+  inbox: { newestCursor: null, oldestCursor: null },
   "low-priority": { newestCursor: null, oldestCursor: null },
   archive: { newestCursor: null, oldestCursor: null },
 };
 
-const defaultIndexState: ChatIndexState = {
+export const defaultIndexState: ChatIndexState = {
   items: [],
   cursors: emptyCursors,
   updatedAt: 0,
@@ -114,7 +118,7 @@ const mergeIndexedChats = (base: IndexedChat[], updates: IndexedChat[]) => {
   return Array.from(map.values());
 };
 
-const summarizeChatForIndex = (chat: BeeperDesktop.Chat): BeeperDesktop.Chat => ({
+export const summarizeChatForIndex = (chat: BeeperDesktop.Chat): BeeperDesktop.Chat => ({
   id: chat.id,
   accountID: chat.accountID,
   network: chat.network ?? "",
@@ -138,17 +142,9 @@ const summarizeChatForIndex = (chat: BeeperDesktop.Chat): BeeperDesktop.Chat => 
 const normalizeIndexState = (state: ChatIndexState): ChatIndexState => {
   let changed = false;
   let items = state.items.map((item) => {
-    let next = item;
-    if (!next.searchFields) {
-      next = { ...next, searchFields: buildSearchFields(next.chat) };
-      changed = true;
-    }
-    const summarizedChat = summarizeChatForIndex(next.chat);
-    if (summarizedChat !== next.chat) {
-      next = { ...next, chat: summarizedChat };
-      changed = true;
-    }
-    return next;
+    if (item.searchFields) return item;
+    changed = true;
+    return { ...item, searchFields: buildSearchFields(item.chat) };
   });
   if (items.length > MAX_INDEXD_CHATS_TARGET) {
     items = sortIndexedChatsByActivity(items).slice(0, MAX_INDEXD_CHATS_TARGET);
@@ -287,7 +283,7 @@ class ThreadSearchIndex {
   }
 }
 
-const buildSearchFields = (chat: BeeperDesktop.Chat): ChatSearchFields => {
+export const buildSearchFields = (chat: BeeperDesktop.Chat): ChatSearchFields => {
   const title = normalizeSearchValue(chat.title || "");
   const network = normalizeSearchValue(chat.network || "");
   const participants =
@@ -355,7 +351,7 @@ export function ChatListView({
   }, [indexState]);
 
   const fetchInbox = async (
-    inbox: ChatInbox,
+    inbox: ChatInbox | undefined,
     mode: "full" | "incremental",
     cursors: ChatIndexState["cursors"][ChatInbox],
     onPage?: (payload: {
@@ -374,7 +370,7 @@ export function ChatListView({
 
     for (let page = 0; page < maxPages; page += 1) {
       const response = await searchChats({
-        inbox,
+        inbox: inbox ? toApiInbox(inbox) : undefined,
         includeMuted: true,
         type: "any",
         limit: INDEX_PAGE_LIMIT,
@@ -391,7 +387,7 @@ export function ChatListView({
       if (pageItems.length === 0) break;
       const mapped = pageItems.map((chat) => ({
         chat: summarizeChatForIndex(chat),
-        inbox,
+        inbox: inbox ?? (chat.isArchived ? "archive" as ChatInbox : "inbox" as ChatInbox),
         searchFields: buildSearchFields(chat),
       }));
       itemsCount += mapped.length;
@@ -429,7 +425,7 @@ export function ChatListView({
     const nextState: ChatIndexState = {
       items: mode === "full" ? [] : [...base.items],
       cursors: {
-        primary: { ...base.cursors.primary },
+        inbox: { ...base.cursors.inbox },
         "low-priority": { ...base.cursors["low-priority"] },
         archive: { ...base.cursors.archive },
       },
@@ -462,6 +458,18 @@ export function ChatListView({
           oldestCursor: result.oldestCursor ?? nextState.cursors[inbox].oldestCursor ?? null,
         };
       }
+
+      // Unfiltered pass to catch chats not in any named inbox.
+      // Uses mergeIndexedChats so already-indexed chats keep their inbox tag.
+      const indexedIDs = new Set(nextState.items.map((item) => item.chat.id));
+      await fetchInbox(undefined, mode, { newestCursor: null, oldestCursor: null }, async (page) => {
+        const newItems = page.items.filter((item) => !indexedIDs.has(item.chat.id));
+        if (newItems.length > 0) {
+          nextState.items = mergeIndexedChats(nextState.items, newItems);
+          for (const item of newItems) indexedIDs.add(item.chat.id);
+          await persistIfNeeded(page.done);
+        }
+      });
 
       nextState.items = sortIndexedChatsByActivity(nextState.items).slice(0, MAX_INDEXD_CHATS_TARGET);
       nextState.updatedAt = Date.now();
@@ -584,8 +592,8 @@ export function ChatListView({
       value={filters.inbox}
       onChange={(value) => setFilters((prev) => ({ ...prev, inbox: value as InboxFilter }))}
     >
-      <List.Dropdown.Item title="All Inbox" value="all" />
-      <List.Dropdown.Item title="Primary" value="primary" />
+      <List.Dropdown.Item title="All" value="all" />
+      <List.Dropdown.Item title="Inbox" value="inbox" />
       <List.Dropdown.Item title="Low Priority" value="low-priority" />
       <List.Dropdown.Item title="Archive" value="archive" />
     </List.Dropdown>
@@ -1161,6 +1169,10 @@ export function ComposeMessageForm({
     removeValue: removeDraft,
   } = useLocalStorage<string>(`chat:draft:${chat.id}`, "");
 
+  const draftApplied = useRef(false);
+  const setDraftRef = useRef(setDraftText);
+  setDraftRef.current = setDraftText;
+
   const { handleSubmit, itemProps, values, setValue } = useForm<{
     text: string;
   }>({
@@ -1189,17 +1201,21 @@ export function ComposeMessageForm({
     },
   });
 
+  // Apply saved draft to form once when localStorage value loads
   useEffect(() => {
-    if (!initialText && draftText && values.text !== draftText) {
+    if (draftApplied.current || initialText) return;
+    if (draftText && values.text !== draftText) {
+      draftApplied.current = true;
       setValue("text", draftText);
     }
   }, [draftText, initialText, setValue, values.text]);
 
+  // Persist form changes to localStorage (ref breaks the cycle)
   useEffect(() => {
     if (values.text !== undefined) {
-      void setDraftText(values.text);
+      void setDraftRef.current(values.text);
     }
-  }, [setDraftText, values.text]);
+  }, [values.text]);
 
   return (
     <Form

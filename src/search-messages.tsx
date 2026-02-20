@@ -20,20 +20,16 @@ import {
   focusApp,
   retrieveChat,
   getRaycastFocusLink,
+  searchChats,
   searchMessages,
   useBeeperDesktop,
 } from "./api";
-import { ChatThread, ComposeMessageForm } from "./chat";
+import { ChatThread, ComposeMessageForm, toApiInbox, type ChatFilters, type InboxFilter, type ChatTypeFilter } from "./chat";
 
 type SenderFilter = "any" | "me" | "others";
-type InboxFilter = "all" | "primary" | "low-priority" | "archive";
-type ChatTypeFilter = "any" | "single" | "group";
 
-interface MessageFilters {
-  inbox: InboxFilter;
-  type: ChatTypeFilter;
+interface MessageFilters extends ChatFilters {
   sender: SenderFilter;
-  includeMuted: boolean;
 }
 
 type SearchMessagesLaunchContext = {
@@ -43,8 +39,9 @@ type SearchMessagesLaunchContext = {
 };
 
 const defaultFilters: MessageFilters = {
-  inbox: "primary",
+  inbox: "inbox",
   type: "any",
+  unreadOnly: false,
   sender: "any",
   includeMuted: true,
 };
@@ -64,7 +61,8 @@ const getBeeperAppPath = () => {
 function SearchMessagesCommand(props: LaunchProps<{ launchContext?: SearchMessagesLaunchContext }>) {
   const initialQuery = props.launchContext?.query ?? "";
   const [searchText, setSearchText] = useState(initialQuery);
-  const [filters, setFilters] = useCachedState<MessageFilters>("messages:filters", defaultFilters);
+  const [rawFilters, setFilters] = useCachedState<MessageFilters>("messages:filters:v2", defaultFilters);
+  const filters = { ...defaultFilters, ...rawFilters };
   const [isShowingDetail, setIsShowingDetail] = useCachedState<boolean>("messages:showing-detail", false);
   const [dateAfter, setDateAfter] = useCachedState<string | undefined>("messages:date-after", undefined);
   const [dateBefore, setDateBefore] = useCachedState<string | undefined>("messages:date-before", undefined);
@@ -87,38 +85,61 @@ function SearchMessagesCommand(props: LaunchProps<{ launchContext?: SearchMessag
 
   const trimmedQuery = searchText.trim();
 
-  const params = useMemo(() => {
+  // Always resolve chat IDs through searchChats so message results stay consistent
+  // with what Recent Chats shows for the same filters.
+  const chatFilterParams = useMemo(
+    () => ({
+      inbox: toApiInbox(filters.inbox),
+      type: filters.type !== "any" ? (filters.type as "single" | "group") : undefined,
+      includeMuted: filters.includeMuted,
+      unreadOnly: filters.unreadOnly || undefined,
+    }),
+    [filters.inbox, filters.type, filters.includeMuted, filters.unreadOnly],
+  );
+
+  const { data: inboxChatIDs, isLoading: isLoadingChats } = useCachedPromise(
+    async (params: typeof chatFilterParams) => {
+      const ids: string[] = [];
+      let cursor: string | null | undefined;
+      for (let page = 0; page < 5 && ids.length < 200; page++) {
+        const result = await searchChats({
+          ...params,
+          cursor,
+          direction: cursor ? "before" : undefined,
+        });
+        ids.push(...result.items.map((c) => c.id));
+        if (!result.hasMore || !result.oldestCursor || result.items.length === 0) break;
+        cursor = result.oldestCursor;
+      }
+      return ids;
+    },
+    [chatFilterParams],
+    { keepPreviousData: true },
+  );
+
+  const resolvedChatIDs = chatIDFilter ? [chatIDFilter] : inboxChatIDs;
+
+  const messageParams = useMemo(() => {
     const next: Parameters<typeof searchMessages>[0] = {
       includeMuted: filters.includeMuted,
+      chatType: filters.type !== "any" ? filters.type : undefined,
+      sender: filters.sender !== "any" ? filters.sender : undefined,
+      query: trimmedQuery.length > 0 ? trimmedQuery : undefined,
+      chatIDs: resolvedChatIDs,
       dateAfter,
       dateBefore,
       limit: 20,
     };
 
-    if (trimmedQuery.length > 0) {
-      next.query = trimmedQuery;
-    }
-    if (filters.sender !== "any") {
-      next.sender = filters.sender;
-    }
-    if (filters.type !== "any") {
-      next.chatType = filters.type;
-    }
-    if (filters.inbox === "primary") {
-      next.excludeLowPriority = true;
-    } else if (filters.inbox === "low-priority") {
-      next.excludeLowPriority = false;
-    }
-    if (chatIDFilter) {
-      next.chatIDs = [chatIDFilter];
-    }
-
     return next;
-  }, [chatIDFilter, dateAfter, dateBefore, filters.includeMuted, filters.inbox, filters.sender, filters.type, trimmedQuery]);
+  }, [resolvedChatIDs, dateAfter, dateBefore, filters.includeMuted, filters.sender, filters.type, trimmedQuery]);
+
+  // Don't fetch messages until chat IDs are resolved
+  const canFetchMessages = chatIDFilter ? true : inboxChatIDs !== undefined && inboxChatIDs.length > 0;
 
   const {
     data: messages = [],
-    isLoading,
+    isLoading: isLoadingMessages,
     revalidate,
     error,
   } = useCachedPromise(
@@ -137,9 +158,11 @@ function SearchMessagesCommand(props: LaunchProps<{ launchContext?: SearchMessag
 
       return allItems;
     },
-    [params],
-    { keepPreviousData: true },
+    [messageParams],
+    { execute: canFetchMessages, keepPreviousData: true },
   );
+
+  const isLoading = isLoadingChats || isLoadingMessages;
 
   const chatIDs = useMemo(() => Array.from(new Set(messages.map((message) => message.chatID))), [messages]);
   const { data: chatMeta = {} } = useCachedPromise(
@@ -173,8 +196,8 @@ function SearchMessagesCommand(props: LaunchProps<{ launchContext?: SearchMessag
       value={filters.inbox}
       onChange={(value) => setFilters((prev) => ({ ...prev, inbox: value as InboxFilter }))}
     >
-      <List.Dropdown.Item title="All Inbox" value="all" />
-      <List.Dropdown.Item title="Primary" value="primary" />
+      <List.Dropdown.Item title="All" value="all" />
+      <List.Dropdown.Item title="Inbox" value="inbox" />
       <List.Dropdown.Item title="Low Priority" value="low-priority" />
       <List.Dropdown.Item title="Archive" value="archive" />
     </List.Dropdown>
@@ -359,6 +382,11 @@ function MessageSearchActions({
         />
       </ActionPanel.Section>
       <ActionPanel.Submenu title="Filters" icon={Icon.Filter}>
+        <Action
+          title={`Unread Only: ${filters.unreadOnly ? "On" : "Off"}`}
+          icon={filters.unreadOnly ? Icon.Checkmark : Icon.Circle}
+          onAction={() => updateFilters({ unreadOnly: !filters.unreadOnly })}
+        />
         <Action
           title={`Include Muted: ${filters.includeMuted ? "On" : "Off"}`}
           icon={filters.includeMuted ? Icon.Checkmark : Icon.Circle}
