@@ -5,30 +5,26 @@ import { readFile } from "node:fs/promises";
 import { basename } from "node:path";
 import { fileURLToPath } from "node:url";
 
-interface Preferences {
-  baseUrl?: string;
-}
+const IS_GA = process.env.BEEPER_TARGET === "ga";
+const DEEP_LINK_PROTOCOL = IS_GA ? "beeper" : "beeper-dev";
+
+const getBaseURL = () => {
+  const { baseUrl } = getPreferenceValues<{ baseUrl?: string }>();
+  return baseUrl || "http://localhost:23373";
+};
 
 let clientInstance: BeeperDesktop | null = null;
-let lastBaseURL: string | null = null;
 let lastAccessToken: string | null = null;
 export const TOKEN_STORAGE_KEY = "beeper-oauth-token";
 
-const getPreferences = () => getPreferenceValues<Preferences>();
-
 const createOAuthClient = () =>
   new OAuth.PKCEClient({
-    redirectMethod: OAuth.RedirectMethod.Web,
+    redirectMethod: OAuth.RedirectMethod.App,
     providerName: "Beeper Desktop",
     providerIcon: "extension-icon.png",
     providerId: "beeper-desktop-api",
     description: "Connect to your local Beeper Desktop app",
   });
-
-const getBaseURL = () => {
-  const preferences = getPreferences();
-  return preferences.baseUrl || "http://localhost:23373";
-};
 
 const RAYCAST_EXTENSION_AUTHOR = "batuhan";
 const RAYCAST_EXTENSION_NAME = "beeper";
@@ -47,15 +43,13 @@ export const getRaycastFocusLink = (
 };
 
 export function createBeeperOAuth() {
-  const baseURL = getBaseURL();
-
   return new OAuthService({
     client: createOAuthClient(),
     clientId: "raycast-beeper-extension",
     scope: "read write",
-    authorizeUrl: `${baseURL}/oauth/authorize`,
-    tokenUrl: `${baseURL}/oauth/token`,
-    refreshTokenUrl: `${baseURL}/oauth/token`,
+    authorizeUrl: `${DEEP_LINK_PROTOCOL}://oauth/authorize`,
+    tokenUrl: `${getBaseURL()}/oauth/token`,
+    refreshTokenUrl: `${getBaseURL()}/oauth/token`,
     bodyEncoding: "url-encoded",
     onAuthorize: async ({ token }) => {
       // Reset client when new token is obtained
@@ -67,16 +61,14 @@ export function createBeeperOAuth() {
 }
 
 export function getBeeperDesktop(): BeeperDesktop {
-  const baseURL = getBaseURL();
   const { token: accessToken } = getAccessToken();
 
-  if (!clientInstance || lastBaseURL !== baseURL || lastAccessToken !== accessToken) {
+  if (!clientInstance || lastAccessToken !== accessToken) {
     clientInstance = new BeeperDesktop({
       accessToken,
-      baseURL: baseURL,
-      logLevel: "info",
+      baseURL: getBaseURL(),
+      logLevel: "debug",
     });
-    lastBaseURL = baseURL;
     lastAccessToken = accessToken;
   }
 
@@ -212,12 +204,11 @@ const requestJSON = async <T>(input: string | URL, init?: RequestInit): Promise<
 };
 
 export const uploadAssetFromFile = async (filePath: string): Promise<AssetUploadResponse> => {
-  const baseURL = getBaseURL();
   const body = new FormData();
   const fileName = basename(filePath);
   const buffer = await readFile(filePath);
   body.append("file", new File([buffer], fileName));
-  return requestJSON<AssetUploadResponse>(`${baseURL}/v1/assets/upload`, {
+  return requestJSON<AssetUploadResponse>(`${getBaseURL()}/v1/assets/upload`, {
     method: "POST",
     headers: getAuthHeaders(),
     body,
@@ -229,8 +220,7 @@ export const uploadAssetFromBase64 = async (params: {
   fileName?: string;
   mimeType?: string;
 }): Promise<AssetUploadResponse> => {
-  const baseURL = getBaseURL();
-  return requestJSON<AssetUploadResponse>(`${baseURL}/v1/assets/upload/base64`, {
+  return requestJSON<AssetUploadResponse>(`${getBaseURL()}/v1/assets/upload/base64`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -245,8 +235,7 @@ export const uploadAssetFromBase64 = async (params: {
 };
 
 export const downloadAsset = async (url: string): Promise<{ srcURL: string }> => {
-  const baseURL = getBaseURL();
-  return requestJSON<{ srcURL: string }>(`${baseURL}/v1/assets/download`, {
+  return requestJSON<{ srcURL: string }>(`${getBaseURL()}/v1/assets/download`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -265,9 +254,8 @@ export const resolveFilePathFromSrcURL = (srcURL?: string) => {
 };
 
 export const getServeAssetURL = (url: string) => {
-  const baseURL = getBaseURL();
   const encoded = encodeURIComponent(url);
-  return `${baseURL}/v1/assets/serve?url=${encoded}`;
+  return `${getBaseURL()}/v1/assets/serve?url=${encoded}`;
 };
 
 export const listAccounts = async (): Promise<BeeperDesktop.Account[]> => {

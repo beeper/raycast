@@ -26,8 +26,12 @@ import {
 import { ChatThread, ComposeMessageForm } from "./chat";
 
 type SenderFilter = "any" | "me" | "others";
+type InboxFilter = "all" | "primary" | "low-priority" | "archive";
+type ChatTypeFilter = "any" | "single" | "group";
 
 interface MessageFilters {
+  inbox: InboxFilter;
+  type: ChatTypeFilter;
   sender: SenderFilter;
   includeMuted: boolean;
 }
@@ -39,6 +43,8 @@ type SearchMessagesLaunchContext = {
 };
 
 const defaultFilters: MessageFilters = {
+  inbox: "primary",
+  type: "any",
   sender: "any",
   includeMuted: true,
 };
@@ -80,13 +86,6 @@ function SearchMessagesCommand(props: LaunchProps<{ launchContext?: SearchMessag
   }, [props.launchContext, setFilters]);
 
   const trimmedQuery = searchText.trim();
-  const shouldSearch =
-    trimmedQuery.length > 0 ||
-    filters.sender !== "any" ||
-    !filters.includeMuted ||
-    Boolean(dateAfter) ||
-    Boolean(dateBefore) ||
-    Boolean(chatIDFilter);
 
   const params = useMemo(() => {
     const next: Parameters<typeof searchMessages>[0] = {
@@ -102,12 +101,20 @@ function SearchMessagesCommand(props: LaunchProps<{ launchContext?: SearchMessag
     if (filters.sender !== "any") {
       next.sender = filters.sender;
     }
+    if (filters.type !== "any") {
+      next.chatType = filters.type;
+    }
+    if (filters.inbox === "primary") {
+      next.excludeLowPriority = true;
+    } else if (filters.inbox === "low-priority") {
+      next.excludeLowPriority = false;
+    }
     if (chatIDFilter) {
       next.chatIDs = [chatIDFilter];
     }
 
     return next;
-  }, [chatIDFilter, dateAfter, dateBefore, filters.includeMuted, filters.sender, trimmedQuery]);
+  }, [chatIDFilter, dateAfter, dateBefore, filters.includeMuted, filters.inbox, filters.sender, filters.type, trimmedQuery]);
 
   const {
     data: messages = [],
@@ -115,9 +122,23 @@ function SearchMessagesCommand(props: LaunchProps<{ launchContext?: SearchMessag
     revalidate,
     error,
   } = useCachedPromise(
-    (input: Parameters<typeof searchMessages>[0]) => searchMessages(input).then((result) => result.items ?? []),
+    async (input: Parameters<typeof searchMessages>[0]) => {
+      const maxMessages = 60;
+      const allItems: BeeperDesktop.Message[] = [];
+      let cursor: string | null | undefined;
+
+      while (allItems.length < maxMessages) {
+        const result = await searchMessages({ ...input, cursor, direction: cursor ? "before" : undefined });
+        const items = result.items ?? [];
+        allItems.push(...items);
+        if (!result.hasMore || !result.oldestCursor || items.length === 0) break;
+        cursor = result.oldestCursor;
+      }
+
+      return allItems;
+    },
     [params],
-    { execute: shouldSearch, keepPreviousData: true },
+    { keepPreviousData: true },
   );
 
   const chatIDs = useMemo(() => Array.from(new Set(messages.map((message) => message.chatID))), [messages]);
@@ -146,12 +167,26 @@ function SearchMessagesCommand(props: LaunchProps<{ launchContext?: SearchMessag
       ...partial,
     }));
 
+  const inboxDropdown = (
+    <List.Dropdown
+      tooltip="Inbox"
+      value={filters.inbox}
+      onChange={(value) => setFilters((prev) => ({ ...prev, inbox: value as InboxFilter }))}
+    >
+      <List.Dropdown.Item title="All Inbox" value="all" />
+      <List.Dropdown.Item title="Primary" value="primary" />
+      <List.Dropdown.Item title="Low Priority" value="low-priority" />
+      <List.Dropdown.Item title="Archive" value="archive" />
+    </List.Dropdown>
+  );
+
   return (
     <List
       isLoading={isLoading}
-      navigationTitle="Search Recent Messages"
+      navigationTitle="Recent Messages"
       searchBarPlaceholder="Search recent messages"
       onSearchTextChange={setSearchText}
+      searchBarAccessory={inboxDropdown}
       isShowingDetail={isShowingDetail}
       throttle
     >
@@ -215,13 +250,11 @@ function SearchMessagesCommand(props: LaunchProps<{ launchContext?: SearchMessag
       {!isLoading && messages.length === 0 && (
         <List.EmptyView
           icon={error ? Icon.Warning : Icon.MagnifyingGlass}
-          title={error ? "Failed to Search Messages" : shouldSearch ? "No Results" : "Type to Search"}
+          title={error ? "Failed to Load Messages" : "No Messages Found"}
           description={
             error
               ? "Make sure Beeper Desktop is running and the API is enabled."
-              : shouldSearch
-                ? "Try adjusting filters or using different words."
-                : "Use the search bar or filters to find messages."
+              : "Try adjusting your filters or search query."
           }
           actions={
             error ? (
@@ -326,14 +359,17 @@ function MessageSearchActions({
         />
       </ActionPanel.Section>
       <ActionPanel.Submenu title="Filters" icon={Icon.Filter}>
-        <Action title="Sender: Any" onAction={() => updateFilters({ sender: "any" })} />
-        <Action title="Sender: Me" onAction={() => updateFilters({ sender: "me" })} />
-        <Action title="Sender: Others" onAction={() => updateFilters({ sender: "others" })} />
         <Action
           title={`Include Muted: ${filters.includeMuted ? "On" : "Off"}`}
           icon={filters.includeMuted ? Icon.Checkmark : Icon.Circle}
           onAction={() => updateFilters({ includeMuted: !filters.includeMuted })}
         />
+        <Action title="Sender: Any" onAction={() => updateFilters({ sender: "any" })} />
+        <Action title="Sender: Me" onAction={() => updateFilters({ sender: "me" })} />
+        <Action title="Sender: Others" onAction={() => updateFilters({ sender: "others" })} />
+        <Action title="Type: Any" onAction={() => updateFilters({ type: "any" })} />
+        <Action title="Type: Direct Messages" onAction={() => updateFilters({ type: "single" })} />
+        <Action title="Type: Group Chats" onAction={() => updateFilters({ type: "group" })} />
         <Action.PickDate
           title={dateAfter ? `After: ${dateAfter}` : "Filter After…"}
           type={Action.PickDate.Type.Date}

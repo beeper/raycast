@@ -4,7 +4,15 @@ import { existsSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { createBeeperOAuth, createChat, focusApp, listAccounts, retrieveChat, searchContacts } from "./api";
+import {
+  createBeeperOAuth,
+  createChat,
+  focusApp,
+  listAccounts,
+  retrieveChat,
+  searchChats,
+  searchContacts,
+} from "./api";
 import { ChatThread } from "./chat";
 
 const getBeeperAppPath = () => {
@@ -189,34 +197,64 @@ export function ContactsView() {
             actions={
               <ActionPanel>
                 <Action
-                  title="Start Chat"
+                  title="Open Chat"
                   icon={Icon.Message}
                   onAction={async () => {
                     const selectedAccountID = (contact as { accountID?: string }).accountID;
                     if (!selectedAccountID) return;
-                    const toast = await showToast({ style: Toast.Style.Animated, title: "Creating chat" });
+                    const toast = await showToast({ style: Toast.Style.Animated, title: "Opening chat" });
                     try {
-                      const response = await createChat({
-                        accountID: selectedAccountID,
-                        participantIDs: [contact.id],
+                      // Search for an existing single chat with this contact
+                      const contactName = contact.fullName || contact.username || contact.id;
+                      const existing = await searchChats({
+                        accountIDs: [selectedAccountID],
                         type: "single",
+                        participantQuery: contactName,
+                        includeMuted: true,
                       });
-                      toast.style = Toast.Style.Success;
-                      toast.title = "Chat created";
-                      const newChatID =
-                        (response as { chatID?: string }).chatID || (response as { id?: string }).id || undefined;
-                      if (newChatID) {
-                        try {
-                          const chat = await retrieveChat(newChatID, { maxParticipantCount: 0 });
-                          push(<ChatThread chat={chat} />);
-                        } catch {
-                          // fallback: keep the list visible if chat load fails
+
+                      // Verify the contact is actually a participant in the returned chat
+                      let matchedChat: typeof existing.items[0] | undefined;
+                      for (const candidate of existing.items ?? []) {
+                        const full = await retrieveChat(candidate.id, { maxParticipantCount: 10 });
+                        const hasContact = full.participants?.items?.some(
+                          (p) =>
+                            p.id === contact.id ||
+                            (contact.username && p.username && p.username === contact.username),
+                        );
+                        if (hasContact) {
+                          matchedChat = full;
+                          break;
                         }
                       }
-                      revalidate();
+
+                      if (matchedChat) {
+                        toast.style = Toast.Style.Success;
+                        toast.title = "Chat found";
+                        push(<ChatThread chat={matchedChat} />);
+                      } else {
+                        toast.title = "Creating chat";
+                        const response = await createChat({
+                          accountID: selectedAccountID,
+                          participantIDs: [contact.id],
+                          type: "single",
+                        });
+                        toast.style = Toast.Style.Success;
+                        toast.title = "Chat created";
+                        const newChatID =
+                          (response as { chatID?: string }).chatID || (response as { id?: string }).id || undefined;
+                        if (newChatID) {
+                          try {
+                            const chat = await retrieveChat(newChatID, { maxParticipantCount: 0 });
+                            push(<ChatThread chat={chat} />);
+                          } catch {
+                            // fallback: keep the list visible if chat load fails
+                          }
+                        }
+                      }
                     } catch (error) {
                       toast.style = Toast.Style.Failure;
-                      toast.title = "Create chat failed";
+                      toast.title = "Open chat failed";
                       toast.message = error instanceof Error ? error.message : String(error);
                     }
                   }}
