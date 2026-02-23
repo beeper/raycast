@@ -18,6 +18,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   createBeeperOAuth,
   focusApp,
+  listChatMessages,
   retrieveChat,
   getRaycastFocusLink,
   searchChats,
@@ -53,6 +54,40 @@ const parseDate = (value?: string) => {
 };
 
 const getMessageID = (message: BeeperDesktop.Message & { messageID?: string }) => message.messageID ?? message.id;
+
+/** Compact emoji-only summary like "👍 ❤️". */
+const formatReactionsShort = (reactions?: BeeperDesktop.Reaction[]): string | undefined => {
+  if (!reactions || reactions.length === 0) return undefined;
+  const counts = new Map<string, number>();
+  for (const r of reactions) {
+    counts.set(r.reactionKey, (counts.get(r.reactionKey) ?? 0) + 1);
+  }
+  return [...counts.entries()].map(([key, n]) => (n > 1 ? `${key}${n}` : key)).join(" ");
+};
+
+/** Detailed summary grouped by sender like "Alice 👍❤️, Bob 😂". */
+const formatReactionsDetailed = (
+  reactions?: BeeperDesktop.Reaction[],
+  nameMap?: Map<string, string>,
+): { text: string; entries: { name: string; emojis: string }[] } | undefined => {
+  if (!reactions || reactions.length === 0) return undefined;
+  const bySender = new Map<string, string[]>();
+  for (const r of reactions) {
+    const key = r.participantID;
+    const list = bySender.get(key) ?? [];
+    list.push(r.reactionKey);
+    bySender.set(key, list);
+  }
+  const entries = [...bySender.entries()].map(([id, emojis]) => ({
+    name: nameMap?.get(id) ?? id,
+    emojis: emojis.join(""),
+  }));
+  return {
+    text: entries.map((e) => `${e.emojis} ${e.name}`).join(", "),
+    entries,
+  };
+};
+
 const getBeeperAppPath = () => {
   const candidates = ["/Applications/Beeper Desktop.app", join(homedir(), "Applications", "Beeper Desktop.app")];
   return candidates.find((path) => existsSync(path));
@@ -184,6 +219,32 @@ function SearchMessagesCommand(props: LaunchProps<{ launchContext?: SearchMessag
     { keepPreviousData: true, execute: chatIDs.length > 0 },
   );
 
+  // Enrich search results with reactions from the chat messages endpoint
+  const messageIDs = useMemo(() => new Set(messages.map((m) => m.id)), [messages]);
+  const { data: reactionsMap = {} } = useCachedPromise(
+    async (ids: string[], msgIDs: Set<string>) => {
+      if (ids.length === 0) return {};
+      const map: Record<string, BeeperDesktop.Reaction[]> = {};
+      await Promise.all(
+        ids.slice(0, 20).map(async (chatID) => {
+          try {
+            const result = await listChatMessages(chatID);
+            for (const msg of result.items ?? []) {
+              if (msg.reactions?.length && msgIDs.has(msg.id)) {
+                map[msg.id] = msg.reactions;
+              }
+            }
+          } catch {
+            // ignore – reactions are best-effort
+          }
+        }),
+      );
+      return map;
+    },
+    [chatIDs, messageIDs],
+    { keepPreviousData: true, execute: chatIDs.length > 0 },
+  );
+
   const updateFilters = (partial: Partial<MessageFilters>) =>
     setFilters((prev) => ({
       ...prev,
@@ -203,6 +264,15 @@ function SearchMessagesCommand(props: LaunchProps<{ launchContext?: SearchMessag
     </List.Dropdown>
   );
 
+  // Build a participant name lookup from message senders
+  const nameMap = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const msg of messages) {
+      if (msg.senderName) map.set(msg.senderID, msg.senderName);
+    }
+    return map;
+  }, [messages]);
+
   return (
     <List
       isLoading={isLoading}
@@ -213,63 +283,78 @@ function SearchMessagesCommand(props: LaunchProps<{ launchContext?: SearchMessag
       isShowingDetail={isShowingDetail}
       throttle
     >
-      {messages.map((message) => {
-        const text = message.text?.trim();
-        const preview = text && text.length > 0 ? text : "Message";
-        const timestamp = parseDate(message.timestamp);
-        const chatInfo = (chatMeta as Record<string, { title?: string; localChatID?: string }>)[message.chatID];
-        const chatTitle = chatInfo?.title;
-        const sender = message.senderName || (message.isSender ? "You" : "Unknown");
-        const subtitle = chatTitle ? `${chatTitle} • ${sender}` : sender;
-        const messageID = getMessageID(message);
-        const messageLink = getRaycastFocusLink({ chatID: message.chatID, messageID });
+      {messages
+        .filter((m) => !!(m.text?.trim()) || (m.attachments && m.attachments.length > 0))
+        .map((message) => {
+          const text = message.text?.trim();
+          const preview = text && text.length > 0 ? text : "Attachment";
+          const enrichedReactions = reactionsMap[message.id] ?? message.reactions;
+          const reactionsShort = formatReactionsShort(enrichedReactions);
+          const reactionsDetailed = formatReactionsDetailed(enrichedReactions, nameMap);
+          const timestamp = parseDate(message.timestamp);
+          const chatInfo = (chatMeta as Record<string, { title?: string; localChatID?: string }>)[message.chatID];
+          const chatTitle = chatInfo?.title;
+          const sender = message.senderName || (message.isSender ? "You" : "Unknown");
+          const subtitle = chatTitle ? `${chatTitle} • ${sender}` : sender;
+          const messageID = getMessageID(message);
+          const messageLink = getRaycastFocusLink({ chatID: message.chatID, messageID });
 
-        return (
-          <List.Item
-            key={message.id}
-            icon={message.isSender ? { source: Icon.Person, tintColor: Color.Blue } : Icon.Message}
-            title={preview}
-            subtitle={subtitle}
-            detail={
-              isShowingDetail ? (
-                <List.Item.Detail
-                  markdown={`**${sender}**\n\n${message.text || "—"}`}
-                  metadata={
-                    <List.Item.Detail.Metadata>
-                      <List.Item.Detail.Metadata.Label title="Message ID" text={messageID} />
-                      <List.Item.Detail.Metadata.Label title="Chat ID" text={message.chatID} />
-                      <List.Item.Detail.Metadata.Label title="Timestamp" text={message.timestamp || "N/A"} />
-                      {message.isSender && (
-                        <List.Item.Detail.Metadata.TagList title="Status">
-                          <List.Item.Detail.Metadata.TagList.Item text="Sent by Me" color={Color.Blue} />
-                        </List.Item.Detail.Metadata.TagList>
-                      )}
-                    </List.Item.Detail.Metadata>
-                  }
+          return (
+            <List.Item
+              key={message.id}
+              icon={message.isSender ? { source: Icon.Person, tintColor: Color.Blue } : Icon.Message}
+              title={preview}
+              subtitle={subtitle}
+              detail={
+                isShowingDetail ? (
+                  <List.Item.Detail
+                    markdown={`**${sender}**\n\n${message.text || "—"}`}
+                    metadata={
+                      <List.Item.Detail.Metadata>
+                        {reactionsDetailed && (
+                          <List.Item.Detail.Metadata.TagList title="Reactions">
+                            {reactionsDetailed.entries.map((e) => (
+                              <List.Item.Detail.Metadata.TagList.Item key={e.name} text={`${e.emojis} ${e.name}`} />
+                            ))}
+                          </List.Item.Detail.Metadata.TagList>
+                        )}
+                        <List.Item.Detail.Metadata.Label title="Message ID" text={messageID} />
+                        <List.Item.Detail.Metadata.Label title="Chat ID" text={message.chatID} />
+                        <List.Item.Detail.Metadata.Label title="Timestamp" text={message.timestamp || "N/A"} />
+                        {message.isSender && (
+                          <List.Item.Detail.Metadata.TagList title="Status">
+                            <List.Item.Detail.Metadata.TagList.Item text="Sent by Me" color={Color.Blue} />
+                          </List.Item.Detail.Metadata.TagList>
+                        )}
+                      </List.Item.Detail.Metadata>
+                    }
+                  />
+                ) : null
+              }
+              accessories={[
+                ...(reactionsShort ? [{ tag: { value: reactionsShort, color: Color.SecondaryText } }] : []),
+                ...(timestamp ? [{ date: timestamp }] : []),
+              ]}
+              actions={
+                <MessageSearchActions
+                  message={message}
+                  messageID={messageID}
+                  messageLink={messageLink}
+                  chatTitle={chatTitle}
+                  onRefresh={revalidate}
+                  filters={filters}
+                  updateFilters={updateFilters}
+                  isShowingDetail={isShowingDetail}
+                  onToggleDetail={() => setIsShowingDetail((prev) => !prev)}
+                  dateAfter={dateAfter}
+                  dateBefore={dateBefore}
+                  setDateAfter={setDateAfter}
+                  setDateBefore={setDateBefore}
                 />
-              ) : null
-            }
-            accessories={[...(timestamp ? [{ date: timestamp }] : [])]}
-            actions={
-              <MessageSearchActions
-                message={message}
-                messageID={messageID}
-                messageLink={messageLink}
-                chatTitle={chatTitle}
-                onRefresh={revalidate}
-                filters={filters}
-                updateFilters={updateFilters}
-                isShowingDetail={isShowingDetail}
-                onToggleDetail={() => setIsShowingDetail((prev) => !prev)}
-                dateAfter={dateAfter}
-                dateBefore={dateBefore}
-                setDateAfter={setDateAfter}
-                setDateBefore={setDateBefore}
-              />
-            }
-          />
-        );
-      })}
+              }
+            />
+          );
+        })}
       {!isLoading && messages.length === 0 && (
         <List.EmptyView
           icon={error ? Icon.Warning : Icon.MagnifyingGlass}

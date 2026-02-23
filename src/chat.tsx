@@ -65,6 +65,49 @@ const getErrorMessage = (error: unknown) => (error instanceof Error ? error.mess
 
 const getMessageID = (message: BeeperDesktop.Message & { messageID?: string }) => message.messageID ?? message.id;
 
+/** Compact emoji-only summary like "👍 ❤️". */
+const formatReactionsShort = (reactions?: BeeperDesktop.Reaction[]): string | undefined => {
+  if (!reactions || reactions.length === 0) return undefined;
+  const counts = new Map<string, number>();
+  for (const r of reactions) {
+    counts.set(r.reactionKey, (counts.get(r.reactionKey) ?? 0) + 1);
+  }
+  return [...counts.entries()].map(([key, n]) => (n > 1 ? `${key}${n}` : key)).join(" ");
+};
+
+/** Detailed summary grouped by sender like "Alice 👍❤️, Bob 😂". */
+const formatReactionsDetailed = (
+  reactions?: BeeperDesktop.Reaction[],
+  nameMap?: Map<string, string>,
+): { text: string; entries: { name: string; emojis: string }[] } | undefined => {
+  if (!reactions || reactions.length === 0) return undefined;
+  const bySender = new Map<string, string[]>();
+  for (const r of reactions) {
+    const key = r.participantID;
+    const list = bySender.get(key) ?? [];
+    list.push(r.reactionKey);
+    bySender.set(key, list);
+  }
+  const entries = [...bySender.entries()].map(([id, emojis]) => ({
+    name: nameMap?.get(id) ?? id,
+    emojis: emojis.join(""),
+  }));
+  return {
+    text: entries.map((e) => `${e.emojis} ${e.name}`).join(", "),
+    entries,
+  };
+};
+
+/** Build a preview string for a message, considering text, attachments, and reactions. */
+const getMessagePreview = (message: BeeperDesktop.Message): string => {
+  const text = message.text?.trim();
+  if (text && text.length > 0) return text;
+  const reactions = formatReactionsShort(message.reactions);
+  if (reactions) return `Reacted ${reactions}`;
+  if (message.attachments && message.attachments.length > 0) return "Attachment";
+  return "Message";
+};
+
 export type ChatInbox = "inbox" | "low-priority" | "archive";
 export type IndexedChat = { chat: BeeperDesktop.Chat; inbox: ChatInbox; searchFields: ChatSearchFields };
 export type ChatIndexState = {
@@ -972,6 +1015,20 @@ export function ChatThread({ chat }: { chat: BeeperDesktop.Chat }) {
 
   const showLoadMore = !isLoading && hasMore;
 
+  // Build a participant name lookup from message senders + chat participants
+  const nameMap = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const msg of messages) {
+      if (msg.senderName) map.set(msg.senderID, msg.senderName);
+    }
+    if (chat.participants?.items) {
+      for (const user of chat.participants.items) {
+        if (user.fullName) map.set(user.id, user.fullName);
+      }
+    }
+    return map;
+  }, [messages, chat.participants]);
+
   return (
     <List
       isLoading={isLoading || isLoadingMore}
@@ -981,52 +1038,65 @@ export function ChatThread({ chat }: { chat: BeeperDesktop.Chat }) {
       isShowingDetail={isShowingDetail}
       throttle
     >
-      {messages.map((message) => {
-        const text = message.text?.trim();
-        const preview = text && text.length > 0 ? text : "Message";
-        const timestamp = parseDate(message.timestamp);
-        const sender = message.senderName || (message.isSender ? "You" : "Unknown");
-        const messageID = getMessageID(message);
+      {messages
+        .filter((m) => !!(m.text?.trim()) || (m.attachments && m.attachments.length > 0))
+        .map((message) => {
+          const preview = getMessagePreview(message);
+          const reactionsShort = formatReactionsShort(message.reactions);
+          const reactionsDetailed = formatReactionsDetailed(message.reactions, nameMap);
+          const timestamp = parseDate(message.timestamp);
+          const sender = message.senderName || (message.isSender ? "You" : "Unknown");
+          const messageID = getMessageID(message);
 
-        return (
-          <List.Item
-            key={message.id}
-            icon={message.isSender ? { source: Icon.Person, tintColor: Color.Blue } : Icon.Message}
-            title={preview}
-            subtitle={sender}
-            detail={
-              isShowingDetail ? (
-                <List.Item.Detail
-                  markdown={`**${sender}**\n\n${message.text || "—"}`}
-                  metadata={
-                    <List.Item.Detail.Metadata>
-                      <List.Item.Detail.Metadata.Label title="Message ID" text={messageID} />
-                      <List.Item.Detail.Metadata.Label title="Chat ID" text={message.chatID} />
-                      <List.Item.Detail.Metadata.Label title="Timestamp" text={message.timestamp || "N/A"} />
-                      {message.isSender && (
-                        <List.Item.Detail.Metadata.TagList title="Status">
-                          <List.Item.Detail.Metadata.TagList.Item text="Sent by Me" color={Color.Blue} />
-                        </List.Item.Detail.Metadata.TagList>
-                      )}
-                    </List.Item.Detail.Metadata>
-                  }
+          return (
+            <List.Item
+              key={message.id}
+              icon={message.isSender ? { source: Icon.Person, tintColor: Color.Blue } : Icon.Message}
+              title={preview}
+              subtitle={sender}
+              detail={
+                isShowingDetail ? (
+                  <List.Item.Detail
+                    markdown={`**${sender}**\n\n${message.text || "—"}`}
+                    metadata={
+                      <List.Item.Detail.Metadata>
+                        {reactionsDetailed && (
+                          <List.Item.Detail.Metadata.TagList title="Reactions">
+                            {reactionsDetailed.entries.map((e) => (
+                              <List.Item.Detail.Metadata.TagList.Item key={e.name} text={`${e.emojis} ${e.name}`} />
+                            ))}
+                          </List.Item.Detail.Metadata.TagList>
+                        )}
+                        <List.Item.Detail.Metadata.Label title="Message ID" text={messageID} />
+                        <List.Item.Detail.Metadata.Label title="Chat ID" text={message.chatID} />
+                        <List.Item.Detail.Metadata.Label title="Timestamp" text={message.timestamp || "N/A"} />
+                        {message.isSender && (
+                          <List.Item.Detail.Metadata.TagList title="Status">
+                            <List.Item.Detail.Metadata.TagList.Item text="Sent by Me" color={Color.Blue} />
+                          </List.Item.Detail.Metadata.TagList>
+                        )}
+                      </List.Item.Detail.Metadata>
+                    }
+                  />
+                ) : null
+              }
+              accessories={[
+                ...(reactionsShort ? [{ tag: { value: reactionsShort, color: Color.SecondaryText } }] : []),
+                ...(timestamp ? [{ date: timestamp }] : []),
+              ]}
+              actions={
+                <MessageActions
+                  chat={chat}
+                  message={message}
+                  onRefresh={loadFirstPage}
+                  onLoadMore={loadMore}
+                  onToggleDetail={() => setIsShowingDetail((prev) => !prev)}
+                  isShowingDetail={isShowingDetail}
                 />
-              ) : null
-            }
-            accessories={[...(timestamp ? [{ date: timestamp }] : [])]}
-            actions={
-              <MessageActions
-                chat={chat}
-                message={message}
-                onRefresh={loadFirstPage}
-                onLoadMore={loadMore}
-                onToggleDetail={() => setIsShowingDetail((prev) => !prev)}
-                isShowingDetail={isShowingDetail}
-              />
-            }
-          />
-        );
-      })}
+              }
+            />
+          );
+        })}
       {showLoadMore && (
         <List.Item
           title="Load older messages"
