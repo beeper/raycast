@@ -14,3 +14,6 @@ compiled_raycast_rust
 .DS_Store
 
 .claude/settings.local.json
+
+# IDE
+.idea/

@@ -40,6 +40,28 @@ Before using this extension, you **must enable the Beeper Desktop API** in your 
 
 Once enabled, you can use the Raycast extension to interact with your Beeper chats and accounts.
 
+## Development
+
+### Targeting the Dev vs GA App
+
+By default, the extension targets the **Beeper Dev** app (using the `beeper-dev://` deep link protocol). To target the **GA (production)** app instead, use the `dev:ga` script:
+
+```bash
+# Target the dev app (default)
+npm run dev
+
+# Target the GA app
+npm run dev:ga
+```
+
+This sets the `BEEPER_TARGET=ga` environment variable, which switches the OAuth deep link protocol from `beeper-dev://` to `beeper://`.
+
+### Deep Linking
+
+The extension uses deep links for OAuth authorization and for creating Raycast quicklinks to chats and messages.
+
+**OAuth:** During authentication, the extension opens a `beeper-dev://oauth/authorize` (or `beeper://oauth/authorize` for GA) deep link to trigger the PKCE OAuth flow in Beeper Desktop.
+
 ## Setup
 
 See the [Beeper Desktop API Getting Started guide](https://developers.beeper.com/desktop-api/#get-started) for additional setup instructions.
