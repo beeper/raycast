@@ -331,7 +331,7 @@ export const createChat = async (body: {
 
 export const listChatMessages = async (
   chatID: string,
-  params?: { cursor?: string | null; direction?: "after" | "before" },
+  params?: { cursor?: string | null; direction?: "after" | "before"; limit?: number },
 ): Promise<CursorResponse<BeeperDesktop.Message>> => {
   const response = (await getBeeperDesktop().get(`/v1/chats/${encodeURIComponent(chatID)}/messages`, {
     query: params,
