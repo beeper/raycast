@@ -12,6 +12,7 @@ import {
   IndexedChat,
   summarizeChatForIndex,
 } from "./chat";
+import { parseDate } from "./utils";
 
 const CHAT_INDEX_KEY = "chat:index:v2";
 
@@ -69,12 +70,6 @@ function SendMessageCommand() {
     if (!trimmedQuery) return allChats.map((item) => item.chat);
     return fuse.search(trimmedQuery).map((result) => result.item.chat);
   }, [allChats, fuse, trimmedQuery]);
-
-  const parseDate = (value?: string) => {
-    if (!value) return undefined;
-    const date = new Date(value);
-    return Number.isNaN(date.getTime()) ? undefined : date;
-  };
 
   return (
     <List

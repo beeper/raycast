@@ -27,13 +27,13 @@ import {
   listChatMessages,
   retrieveChat,
   searchChats,
-  searchMessages,
   sendMessage,
   updateMessage,
   getRaycastFocusLink,
   useBeeperDesktop,
 } from "./api";
 import { formatReactionsShort, formatReactionsDetailed } from "./reactions";
+import { parseDate, getMessageID } from "./utils";
 
 export type InboxFilter = "all" | "inbox" | "primary" | "low-priority" | "archive";
 export type ChatTypeFilter = "any" | "single" | "group";
@@ -56,17 +56,7 @@ const recentDefaultFilters: ChatFilters = {
   includeMuted: true,
 };
 
-const parseDate = (value?: string) => {
-  if (!value) return undefined;
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? undefined : date;
-};
-
 const getErrorMessage = (error: unknown) => (error instanceof Error ? error.message : String(error));
-
-const getMessageID = (message: BeeperDesktop.Message & { messageID?: string }) => message.messageID ?? message.id;
-
-
 
 /** Build a preview string for a message, considering text, attachments, and reactions. */
 const getMessagePreview = (message: BeeperDesktop.Message): string => {
@@ -92,6 +82,7 @@ const INDEX_PAGE_LIMIT = 50;
 const INDEX_MAX_PAGES = 10;
 const INDEX_MAX_PAGES_INCREMENTAL = 2;
 const INDEX_REFRESH_MAX_AGE_MS = 6 * 60 * 60 * 1000;
+const INDEX_INCREMENTAL_MIN_AGE_MS = 30 * 1000;
 const MAX_PARTICIPANTS_INDEXED = 10;
 const MAX_PARTICIPANTS_STORED = 0;
 const MAX_INDEXED_CHATS_PER_INBOX = Math.ceil(MAX_INDEXD_CHATS_TARGET / INDEXED_INBOXES.length);
@@ -129,6 +120,26 @@ const mergeIndexedChats = (base: IndexedChat[], updates: IndexedChat[]) => {
     map.set(item.chat.id, item);
   }
   return Array.from(map.values());
+};
+
+const indexItemsChanged = (before: IndexedChat[], after: IndexedChat[]): boolean => {
+  if (before.length !== after.length) return true;
+  const beforeMap = new Map(before.map((i) => [i.chat.id, i]));
+  for (const item of after) {
+    const prev = beforeMap.get(item.chat.id);
+    if (!prev) return true;
+    if (
+      prev.chat.lastActivity !== item.chat.lastActivity ||
+      prev.chat.unreadCount !== item.chat.unreadCount ||
+      prev.chat.title !== item.chat.title ||
+      prev.chat.isPinned !== item.chat.isPinned ||
+      prev.chat.isMuted !== item.chat.isMuted ||
+      prev.chat.isArchived !== item.chat.isArchived ||
+      prev.inbox !== item.inbox
+    )
+      return true;
+  }
+  return false;
 };
 
 export const summarizeChatForIndex = (chat: BeeperDesktop.Chat): BeeperDesktop.Chat => ({
@@ -326,6 +337,7 @@ type ChatListViewProps = {
   showPinnedSection?: boolean;
   showSmartSections?: boolean;
   showUnreadSection?: boolean;
+  showPinnedSection?: boolean;
 };
 
 export function ChatListView({
@@ -336,6 +348,7 @@ export function ChatListView({
   showPinnedSection = true,
   showSmartSections = false,
   showUnreadSection = true,
+  showPinnedSection = true,
 }: ChatListViewProps) {
   const [searchText, setSearchText] = useState("");
   const [filters, setFilters] = useCachedState<ChatFilters>(`${stateKey}:filters`, defaultFilters);
@@ -345,10 +358,8 @@ export function ChatListView({
     [],
   );
   const { setValue: setLastChatID } = useLocalStorage<string | null>(`${stateKey}:last-id`, null);
-  const { value: indexStateRaw = defaultIndexState, setValue: setIndexState } = useLocalStorage<ChatIndexState>(
-    `${stateKey}:index:v2`,
-    defaultIndexState,
-  );
+  const { value: indexStateRaw = defaultIndexState, setValue: setIndexState, isLoading: isIndexLoading } =
+    useLocalStorage<ChatIndexState>(`${stateKey}:index:v2`, defaultIndexState);
 
   const trimmedQuery = searchText.trim();
   const normalizedType = (filters.type as string) === "channel" ? "any" : filters.type;
@@ -431,7 +442,8 @@ export function ChatListView({
   const refreshIndex = async (mode: "full" | "incremental" = "incremental") => {
     if (refreshInFlight.current) return;
     refreshInFlight.current = true;
-    setIsIndexRefreshing(true);
+    const showRefreshState = mode === "full" || indexRef.current.items.length === 0;
+    if (showRefreshState) setIsIndexRefreshing(true);
     setError(undefined);
 
     const base = mode === "full" ? defaultIndexState : (indexRef.current ?? defaultIndexState);
@@ -464,7 +476,7 @@ export function ChatListView({
           if (nextState.items.length > MAX_INDEXD_CHATS_TARGET * 2) {
             nextState.items = sortIndexedChatsByActivity(nextState.items).slice(0, MAX_INDEXD_CHATS_TARGET);
           }
-          await persistIfNeeded(page.done);
+          if (mode === "full") await persistIfNeeded(page.done);
         });
         nextState.cursors[inbox] = {
           newestCursor: result.newestCursor ?? nextState.cursors[inbox].newestCursor ?? null,
@@ -472,39 +484,32 @@ export function ChatListView({
         };
       }
 
-      // Unfiltered pass to catch chats not in any named inbox.
-      // Uses mergeIndexedChats so already-indexed chats keep their inbox tag.
-      const indexedIDs = new Set(nextState.items.map((item) => item.chat.id));
-      await fetchInbox(undefined, mode, { newestCursor: null, oldestCursor: null }, async (page) => {
-        const newItems = page.items.filter((item) => !indexedIDs.has(item.chat.id));
-        if (newItems.length > 0) {
-          nextState.items = mergeIndexedChats(nextState.items, newItems);
-          for (const item of newItems) indexedIDs.add(item.chat.id);
-          await persistIfNeeded(page.done);
-        }
-      });
-
       nextState.items = sortIndexedChatsByActivity(nextState.items).slice(0, MAX_INDEXD_CHATS_TARGET);
-      nextState.updatedAt = Date.now();
-      await setIndexState(nextState);
+      if (mode === "full" || indexItemsChanged(base.items, nextState.items)) {
+        nextState.updatedAt = Date.now();
+        await setIndexState(nextState);
+      }
     } catch (err) {
       setError(err);
     } finally {
       refreshInFlight.current = false;
-      setIsIndexRefreshing(false);
+      if (showRefreshState) setIsIndexRefreshing(false);
     }
   };
 
   useEffect(() => {
+    if (isIndexLoading) return;
     if (initialRefreshDone.current) return;
     initialRefreshDone.current = true;
-    const isStale = Date.now() - indexState.updatedAt > INDEX_REFRESH_MAX_AGE_MS;
-    if (indexState.items.length === 0 || isStale) {
+    const age = Date.now() - indexState.updatedAt;
+    if (indexState.items.length === 0 || age > INDEX_REFRESH_MAX_AGE_MS) {
       void refreshIndex("full");
       return;
     }
-    void refreshIndex("incremental");
-  }, [indexState.items.length]);
+    if (age > INDEX_INCREMENTAL_MIN_AGE_MS) {
+      void refreshIndex("incremental");
+    }
+  }, [isIndexLoading, indexState.items.length]);
 
   const tokens = useMemo(() => parseSearchTerms(trimmedQuery), [trimmedQuery]);
   const normalizedQuery = useMemo(() => normalizeSearchValue(trimmedQuery), [trimmedQuery]);
@@ -591,11 +596,12 @@ export function ChatListView({
     trimmedQuery,
   ]);
 
+  const frecencyInput = useMemo(() => [...chats], [chats]);
   const {
     data: frecencyChats = [],
     visitItem,
     resetRanking,
-  } = useFrecencySorting(chats, {
+  } = useFrecencySorting(frecencyInput, {
     key: (chat) => chat.id,
   });
 
@@ -616,7 +622,7 @@ export function ChatListView({
 
   const setChatType = (type: ChatTypeFilter) => setFilters((prev) => ({ ...prev, type }));
 
-  const isLoading = isIndexRefreshing && indexState.items.length === 0;
+  const isLoading = isIndexLoading || (isIndexRefreshing && indexState.items.length === 0);
 
   const markChatVisited = (chat: BeeperDesktop.Chat) => {
     if (!showSmartSections) return;
@@ -686,8 +692,9 @@ export function ChatListView({
     }
   };
 
-  const pinnedChats = chats.filter((chat) => chat.isPinned);
-  const unreadChats = chats.filter((chat) => chat.unreadCount > 0 && !chat.isPinned);
+  const pinnedChats = showPinnedSection ? chats.filter((chat) => chat.isPinned) : [];
+  const unreadChats = chats.filter((chat) => chat.unreadCount > 0 && !(showPinnedSection && chat.isPinned));
+
 
   const pinnedIDs = new Set(pinnedChats.map((chat) => chat.id));
   const unreadIDs = showUnreadSection ? new Set(unreadChats.map((chat) => chat.id)) : new Set<string>();
@@ -933,19 +940,25 @@ export function ChatThread({ chat }: { chat: BeeperDesktop.Chat }) {
 
   const trimmedQuery = query.trim();
 
+  const PAGE_LIMIT = 50;
+
+  /** Derive the pagination cursor from the last message's sortKey. */
+  const getLastSortKey = (items: BeeperDesktop.Message[]): string | null => {
+    if (items.length === 0) return null;
+    return items[items.length - 1].sortKey ?? null;
+  };
+
   const loadFirstPage = async (isCancelled?: () => boolean) => {
     setIsLoading(true);
     setError(undefined);
 
     try {
-      const result =
-        trimmedQuery.length > 0
-          ? await searchMessages({ query: trimmedQuery, chatIDs: [chat.id], limit: 50 })
-          : await listChatMessages(chat.id);
+      const result = await listChatMessages(chat.id, { limit: PAGE_LIMIT });
       if (isCancelled?.()) return;
-      setMessages(result.items ?? []);
+      const items = result.items ?? [];
+      setMessages(items);
+      setCursor(getLastSortKey(items));
       setHasMore(Boolean(result.hasMore));
-      setCursor(result.oldestCursor ?? result.nextCursor ?? result.cursor ?? null);
     } catch (err) {
       if (!isCancelled?.()) {
         setError(getErrorMessage(err));
@@ -958,16 +971,21 @@ export function ChatThread({ chat }: { chat: BeeperDesktop.Chat }) {
   };
 
   const loadMore = async () => {
-    if (!hasMore || !cursor) return;
+    if (!cursor) {
+      await showHUD("No more messages to load");
+      return;
+    }
     setIsLoadingMore(true);
     try {
-      const nextPage =
-        trimmedQuery.length > 0
-          ? await searchMessages({ query: trimmedQuery, chatIDs: [chat.id], cursor, direction: "before", limit: 50 })
-          : await listChatMessages(chat.id, { cursor, direction: "before" });
-      setMessages((prev) => [...prev, ...(nextPage.items ?? [])]);
+      const nextPage = await listChatMessages(chat.id, { cursor, direction: "before", limit: PAGE_LIMIT });
+      const items = nextPage.items ?? [];
+      setMessages((prev) => [...prev, ...items]);
+      setCursor(getLastSortKey(items) ?? cursor);
       setHasMore(Boolean(nextPage.hasMore));
-      setCursor(nextPage.oldestCursor ?? nextPage.nextCursor ?? nextPage.cursor ?? null);
+      if (items.length === 0) {
+        setHasMore(false);
+        await showHUD("No older messages found");
+      }
     } catch (err) {
       await showHUD(`Failed to load more: ${getErrorMessage(err)}`);
     } finally {
@@ -981,7 +999,14 @@ export function ChatThread({ chat }: { chat: BeeperDesktop.Chat }) {
     return () => {
       cancelled = true;
     };
-  }, [chat.id, trimmedQuery]);
+  }, [chat.id]);
+
+  const filteredMessages = useMemo(() => {
+    const nonEmpty = messages.filter((m) => !!(m.text?.trim()) || (m.attachments && m.attachments.length > 0));
+    if (!trimmedQuery) return nonEmpty;
+    const lower = trimmedQuery.toLowerCase();
+    return nonEmpty.filter((m) => m.text?.toLowerCase().includes(lower));
+  }, [messages, trimmedQuery]);
 
   const showLoadMore = !isLoading && hasMore;
 
@@ -1003,14 +1028,13 @@ export function ChatThread({ chat }: { chat: BeeperDesktop.Chat }) {
     <List
       isLoading={isLoading || isLoadingMore}
       navigationTitle={chat.title || "Chat"}
-      searchBarPlaceholder="Search within this chat (literal word match)"
+      searchBarPlaceholder="Search within this chat"
+      filtering={false}
       onSearchTextChange={setQuery}
       isShowingDetail={isShowingDetail}
       throttle
     >
-      {messages
-        .filter((m) => !!(m.text?.trim()) || (m.attachments && m.attachments.length > 0))
-        .map((message) => {
+      {filteredMessages.map((message) => {
           const preview = getMessagePreview(message);
           const reactionsShort = formatReactionsShort(message.reactions);
           const reactionsDetailed = formatReactionsDetailed(message.reactions, nameMap);
@@ -1078,14 +1102,16 @@ export function ChatThread({ chat }: { chat: BeeperDesktop.Chat }) {
           }
         />
       )}
-      {!isLoading && messages.length === 0 && (
+      {!isLoading && filteredMessages.length === 0 && (
         <List.EmptyView
           icon={error ? Icon.Warning : Icon.Message}
-          title={error ? "Failed to Load Messages" : "No Messages Found"}
+          title={error ? "Failed to Load Messages" : trimmedQuery ? "No Matching Messages" : "No Messages Found"}
           description={
             error
               ? "Make sure Beeper Desktop is running and the API is enabled."
-              : "Try a different query or send a new message."
+              : trimmedQuery
+                ? "No messages match your search. Try loading older messages first."
+                : "Try a different query or send a new message."
           }
         />
       )}

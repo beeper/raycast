@@ -1,8 +1,5 @@
 import { Action, ActionPanel, Icon, List, Toast, showToast, useNavigation } from "@raycast/api";
 import { useCachedPromise, withAccessToken } from "@raycast/utils";
-import { existsSync } from "node:fs";
-import { homedir } from "node:os";
-import { join } from "node:path";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   createBeeperOAuth,
@@ -14,11 +11,7 @@ import {
   searchContacts,
 } from "./api";
 import { ChatThread } from "./chat";
-
-const getBeeperAppPath = () => {
-  const candidates = ["/Applications/Beeper Desktop.app", join(homedir(), "Applications", "Beeper Desktop.app")];
-  return candidates.find((path) => existsSync(path));
-};
+import { getBeeperAppPath } from "./utils";
 
 const getContactSortName = (contact: {
   fullName?: string;
@@ -66,7 +59,6 @@ export function ContactsView() {
   const {
     data: contacts = [],
     isLoading,
-    revalidate,
     error,
   } = useCachedPromise(
     async (termInput: string, filter: string, accountsSnapshotKey: string) => {

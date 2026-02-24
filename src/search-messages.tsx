@@ -25,8 +25,9 @@ import {
   searchMessages,
   useBeeperDesktop,
 } from "./api";
-import { ChatThread, ComposeMessageForm, toApiInbox, type ChatFilters, type InboxFilter, type ChatTypeFilter } from "./chat";
+import { ChatThread, ComposeMessageForm, toApiInbox, type ChatFilters, type InboxFilter } from "./chat";
 import { formatReactionsShort, formatReactionsDetailed } from "./reactions";
+import { parseDate, getMessageID, getBeeperAppPath } from "./utils";
 
 type SenderFilter = "any" | "me" | "others";
 
@@ -48,19 +49,6 @@ const defaultFilters: MessageFilters = {
   includeMuted: true,
 };
 
-const parseDate = (value?: string) => {
-  if (!value) return undefined;
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? undefined : date;
-};
-
-const getMessageID = (message: BeeperDesktop.Message & { messageID?: string }) => message.messageID ?? message.id;
-
-
-const getBeeperAppPath = () => {
-  const candidates = ["/Applications/Beeper Desktop.app", join(homedir(), "Applications", "Beeper Desktop.app")];
-  return candidates.find((path) => existsSync(path));
-};
 
 function SearchMessagesCommand(props: LaunchProps<{ launchContext?: SearchMessagesLaunchContext }>) {
   const initialQuery = props.launchContext?.query ?? "";
@@ -142,7 +130,7 @@ function SearchMessagesCommand(props: LaunchProps<{ launchContext?: SearchMessag
   const canFetchMessages = chatIDFilter ? true : inboxChatIDs !== undefined && inboxChatIDs.length > 0;
 
   const {
-    data: messages = [],
+    data: rawMessages = [],
     isLoading: isLoadingMessages,
     revalidate,
     error,
@@ -166,6 +154,10 @@ function SearchMessagesCommand(props: LaunchProps<{ launchContext?: SearchMessag
     { execute: canFetchMessages, keepPreviousData: true },
   );
 
+  // When canFetchMessages is false but inboxChatIDs has resolved to an empty array,
+  // suppress stale data from the previous filter rather than showing it as if valid.
+  const messages = !canFetchMessages && inboxChatIDs !== undefined ? [] : rawMessages;
+
   const isLoading = isLoadingChats || isLoadingMessages;
 
   const chatIDs = useMemo(() => Array.from(new Set(messages.map((message) => message.chatID))), [messages]);
@@ -188,30 +180,46 @@ function SearchMessagesCommand(props: LaunchProps<{ launchContext?: SearchMessag
     { keepPreviousData: true, execute: chatIDs.length > 0 },
   );
 
-  // Enrich search results with reactions from the chat messages endpoint
+  // Enrich search results with reactions from the chat messages endpoint.
+  // Eagerly load the first 10 chats for visible accessories; lazy-load the
+  // rest only when the detail panel is open to reduce API burst on every search.
   const messageIDs = useMemo(() => new Set(messages.map((m) => m.id)), [messages]);
-  const { data: reactionsMap = {} } = useCachedPromise(
-    async (ids: string[], msgIDs: Set<string>) => {
-      if (ids.length === 0) return {};
-      const map: Record<string, BeeperDesktop.Reaction[]> = {};
-      await Promise.all(
-        ids.slice(0, 20).map(async (chatID) => {
-          try {
-            const result = await listChatMessages(chatID);
-            for (const msg of result.items ?? []) {
-              if (msg.reactions?.length && msgIDs.has(msg.id)) {
-                map[msg.id] = msg.reactions;
-              }
+  const eagerChatIDs = useMemo(() => chatIDs.slice(0, 10), [chatIDs]);
+  const lazyChatIDs = useMemo(() => chatIDs.slice(10), [chatIDs]);
+
+  const fetchReactions = async (ids: string[], msgIDs: Set<string>) => {
+    if (ids.length === 0) return {};
+    const map: Record<string, BeeperDesktop.Reaction[]> = {};
+    await Promise.all(
+      ids.map(async (chatID) => {
+        try {
+          const result = await listChatMessages(chatID);
+          for (const msg of result.items ?? []) {
+            if (msg.reactions?.length && msgIDs.has(msg.id)) {
+              map[msg.id] = msg.reactions;
             }
-          } catch {
-            // ignore – reactions are best-effort
           }
-        }),
-      );
-      return map;
-    },
-    [chatIDs, messageIDs],
-    { keepPreviousData: true, execute: chatIDs.length > 0 },
+        } catch {
+          // ignore – reactions are best-effort
+        }
+      }),
+    );
+    return map;
+  };
+
+  const { data: eagerReactionsMap = {} } = useCachedPromise(fetchReactions, [eagerChatIDs, messageIDs], {
+    keepPreviousData: true,
+    execute: eagerChatIDs.length > 0,
+  });
+
+  const { data: lazyReactionsMap = {} } = useCachedPromise(fetchReactions, [lazyChatIDs, messageIDs], {
+    keepPreviousData: true,
+    execute: isShowingDetail && lazyChatIDs.length > 0,
+  });
+
+  const reactionsMap = useMemo(
+    () => ({ ...eagerReactionsMap, ...lazyReactionsMap }),
+    [eagerReactionsMap, lazyReactionsMap],
   );
 
   const updateFilters = (partial: Partial<MessageFilters>) =>

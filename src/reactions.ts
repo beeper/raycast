@@ -14,7 +14,7 @@ export const formatReactionsShort = (reactions?: BeeperDesktop.Reaction[]): stri
 export const formatReactionsDetailed = (
   reactions?: BeeperDesktop.Reaction[],
   nameMap?: Map<string, string>,
-): { text: string; entries: { name: string; emojis: string }[] } | undefined => {
+): { entries: { name: string; emojis: string }[] } | undefined => {
   if (!reactions || reactions.length === 0) return undefined;
   const bySender = new Map<string, string[]>();
   for (const r of reactions) {
@@ -27,8 +27,5 @@ export const formatReactionsDetailed = (
     name: nameMap?.get(id) ?? id,
     emojis: emojis.join(""),
   }));
-  return {
-    text: entries.map((e) => `${e.emojis} ${e.name}`).join(", "),
-    entries,
-  };
+  return { entries };
 };
