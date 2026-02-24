@@ -529,7 +529,6 @@ export function ChatListView({
   }, [isIndexLoading, indexState.items.length]);
 
   const tokens = useMemo(() => parseSearchTerms(trimmedQuery), [trimmedQuery]);
-  const normalizedQuery = useMemo(() => normalizeSearchValue(trimmedQuery), [trimmedQuery]);
   const searchIndex = useMemo(() => {
     if (tokens.length === 0) return null;
     const collection = indexState.items.map((item) => ({ id: item.chat.id, searchFields: item.searchFields }));
@@ -548,65 +547,19 @@ export function ChatListView({
       return sortChatsByActivity(filtered.map((item) => item.chat));
     }
 
-    const now = Date.now();
     const filteredById = new Map(filtered.map((item) => [item.chat.id, item]));
     const results = searchIndex ? searchIndex.search(trimmedQuery, ["title", "network", "participants"]) : [];
-    const scored = results
-      .map((result) => {
-        const indexed = filteredById.get(result.id);
-        if (!indexed) return null;
-        const title = indexed.searchFields.title;
-        return {
-          chat: indexed.chat,
-          exactTitle: normalizedQuery.length > 0 && title === normalizedQuery,
-          prefixTitle: normalizedQuery.length > 0 && title.startsWith(normalizedQuery),
-          titleHits: result.score.title.hits,
-          participantHits: result.score.participants.hits,
-          networkHits: result.score.network.hits,
-          isSingle: indexed.chat.type === "single",
-          timestamp: getChatTimestamp(indexed.chat),
-        };
-      })
-      .filter(
-        (
-          item,
-        ): item is {
-          chat: BeeperDesktop.Chat;
-          exactTitle: boolean;
-          prefixTitle: boolean;
-          titleHits: number;
-          participantHits: number;
-          networkHits: number;
-          isSingle: boolean;
-          timestamp: number;
-        } => Boolean(item),
-      );
+    const matched = results
+      .map((result) => filteredById.get(result.id)?.chat)
+      .filter((chat): chat is BeeperDesktop.Chat => Boolean(chat));
 
-    const recencyBoost = (timestamp: number) => Math.max(0, 30 - (now - timestamp) / (24 * 60 * 60 * 1000));
-
-    scored.sort((a, b) => {
-      if (a.exactTitle !== b.exactTitle) return a.exactTitle ? -1 : 1;
-      if (a.prefixTitle !== b.prefixTitle) return a.prefixTitle ? -1 : 1;
-
-      const aRecency = recencyBoost(a.timestamp);
-      const bRecency = recencyBoost(b.timestamp);
-      if (aRecency !== bRecency) return bRecency - aRecency;
-
-      if (a.titleHits !== b.titleHits) return b.titleHits - a.titleHits;
-      if (a.participantHits !== b.participantHits) return b.participantHits - a.participantHits;
-      if (a.isSingle !== b.isSingle) return a.isSingle ? -1 : 1;
-      if (a.networkHits !== b.networkHits) return b.networkHits - a.networkHits;
-      return b.timestamp - a.timestamp;
-    });
-
-    return scored.map((item) => item.chat);
+    return sortChatsByActivity(matched);
   }, [
     filters.includeMuted,
     filters.inbox,
     filters.type,
     filters.unreadOnly,
     indexState.items,
-    normalizedQuery,
     normalizedType,
     searchIndex,
     tokens,
