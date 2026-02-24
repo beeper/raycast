@@ -303,6 +303,7 @@ export const searchChats = async (params: {
   limit?: number;
   lastActivityAfter?: string;
   lastActivityBefore?: string;
+  limit?: number;
   participantQuery?: string;
   query?: string;
   type?: "single" | "group" | "channel" | "any";

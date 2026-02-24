@@ -36,7 +36,7 @@ function SendMessageCommand() {
         if (result.items.length === 0) return;
         const newItems: IndexedChat[] = result.items.map((chat) => ({
           chat: summarizeChatForIndex(chat),
-          inbox: chat.isArchived ? ("archive" as const) : ("inbox" as const),
+          inbox: chat.isArchived ? ("archive" as const) : ("all" as const),
           searchFields: buildSearchFields(chat),
         }));
         const base = indexRef.current ?? defaultIndexState;

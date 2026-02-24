@@ -68,7 +68,7 @@ const getMessagePreview = (message: BeeperDesktop.Message): string => {
   return "Message";
 };
 
-export type ChatInbox = "inbox" | "low-priority" | "archive";
+export type ChatInbox = "all" | "inbox" | "low-priority" | "archive";
 export type IndexedChat = { chat: BeeperDesktop.Chat; inbox: ChatInbox; searchFields: ChatSearchFields };
 export type ChatIndexState = {
   items: IndexedChat[];
@@ -88,6 +88,7 @@ const MAX_PARTICIPANTS_STORED = 0;
 const MAX_INDEXED_CHATS_PER_INBOX = Math.ceil(MAX_INDEXD_CHATS_TARGET / INDEXED_INBOXES.length);
 
 const emptyCursors: ChatIndexState["cursors"] = {
+  all: { newestCursor: null, oldestCursor: null },
   inbox: { newestCursor: null, oldestCursor: null },
   "low-priority": { newestCursor: null, oldestCursor: null },
   archive: { newestCursor: null, oldestCursor: null },
@@ -411,7 +412,7 @@ export function ChatListView({
       if (pageItems.length === 0) break;
       const mapped = pageItems.map((chat) => ({
         chat: summarizeChatForIndex(chat),
-        inbox: inbox ?? (chat.isArchived ? "archive" as ChatInbox : "inbox" as ChatInbox),
+        inbox: inbox ?? ("all" as ChatInbox),
         searchFields: buildSearchFields(chat),
       }));
       itemsCount += mapped.length;
@@ -450,6 +451,7 @@ export function ChatListView({
     const nextState: ChatIndexState = {
       items: mode === "full" ? [] : [...base.items],
       cursors: {
+        all: { ...base.cursors.all },
         inbox: { ...base.cursors.inbox },
         "low-priority": { ...base.cursors["low-priority"] },
         archive: { ...base.cursors.archive },
@@ -466,6 +468,21 @@ export function ChatListView({
         await setIndexState({ ...nextState, updatedAt: now });
       };
 
+      // Baseline fetch: query without inbox filter to capture every chat, including any
+      // that don't appear in the three specific inbox endpoints. Tags chats as "all"
+      // (unclassified). No stored cursors — always starts fresh so new/reclassified
+      // chats are picked up. Per-inbox fetches below overwrite with authoritative tags.
+      await fetchInbox(undefined, mode, { newestCursor: null, oldestCursor: null }, async (page) => {
+        nextState.items = mergeIndexedChats(nextState.items, page.items);
+        if (nextState.items.length > MAX_INDEXD_CHATS_TARGET * 2) {
+          nextState.items = sortIndexedChatsByActivity(nextState.items).slice(0, MAX_INDEXD_CHATS_TARGET);
+        }
+        if (mode === "full") await persistIfNeeded(page.done);
+      });
+
+      // Per-inbox fetches: overwrite the baseline tags with the authoritative inbox
+      // classification from the API. This preserves the distinction between primary,
+      // low-priority, and archive that the filter dropdown relies on.
       for (const inbox of INDEXED_INBOXES) {
         const result = await fetchInbox(inbox, mode, base.cursors[inbox], async (page) => {
           nextState.items = mergeIndexedChats(nextState.items, page.items);
