@@ -94,7 +94,7 @@ export async function openChat(options: OpenChatOptions): Promise<OpenChatResult
       return { success: false, error: "No chat ID or name provided" };
     }
 
-    await client.post("/v1/focus", { body: { chatID: chatId } });
+    await client.focus({ chatID: chatId });
     await closeMainWindow();
 
     return { success: true, chat: foundChat };

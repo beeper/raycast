@@ -70,9 +70,7 @@ export async function sendMessage(options: SendMessageOptions): Promise<SendMess
       return { success: false, error: "No chat ID or name provided" };
     }
 
-    await client.post(`/v1/chats/${encodeURIComponent(chatId)}/messages`, {
-      body: { text: options.message },
-    });
+    await client.messages.send(chatId, { text: options.message });
 
     return {
       success: true,

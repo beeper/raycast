@@ -96,7 +96,7 @@ export const focusApp = async (
   } = {},
 ) => {
   try {
-    await getBeeperDesktop().post("/v1/focus", { body: params });
+    await getBeeperDesktop().focus(params);
     await closeMainWindow();
     await showHUD("Beeper Desktop focused");
   } catch (error) {
@@ -318,7 +318,7 @@ export const createChat = async (body: {
   title?: string;
   messageText?: string;
 }) => {
-  return getBeeperDesktop().post("/v1/chats", { body });
+  return getBeeperDesktop().chats.create(body);
 };
 
 export const listChatMessages = async (
