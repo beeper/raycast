@@ -31,6 +31,7 @@ import { parseDate, getMessageID, getBeeperAppPath } from "./utils";
 
 type SenderFilter = "any" | "me" | "others";
 
+
 interface MessageFilters extends ChatFilters {
   sender: SenderFilter;
 }
@@ -156,7 +157,18 @@ function SearchMessagesCommand(props: LaunchProps<{ launchContext?: SearchMessag
 
   // When canFetchMessages is false but inboxChatIDs has resolved to an empty array,
   // suppress stale data from the previous filter rather than showing it as if valid.
-  const messages = !canFetchMessages && inboxChatIDs !== undefined ? [] : rawMessages;
+  const filtered = !canFetchMessages && inboxChatIDs !== undefined ? [] : rawMessages;
+
+  // Sort by most recent first regardless of API ordering.
+  const messages = useMemo(
+    () =>
+      [...filtered].sort((a, b) => {
+        const ta = a.timestamp ? new Date(a.timestamp).getTime() : 0;
+        const tb = b.timestamp ? new Date(b.timestamp).getTime() : 0;
+        return tb - ta;
+      }),
+    [filtered],
+  );
 
   const isLoading = isLoadingChats || isLoadingMessages;
 
