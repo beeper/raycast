@@ -8,11 +8,9 @@ import {
   Icon,
   Keyboard,
   List,
-  Toast,
   confirmAlert,
   useNavigation,
   showHUD,
-  showToast,
 } from "@raycast/api";
 import { useCachedState, useFrecencySorting, useForm, useLocalStorage, withAccessToken } from "@raycast/utils";
 import BeeperDesktop from "@beeper/desktop-api";
@@ -33,7 +31,7 @@ import {
   useBeeperDesktop,
 } from "./api";
 import { formatReactionsShort, formatReactionsDetailed } from "./reactions";
-import { parseDate, getMessageID } from "./utils";
+import { parseDate, getMessageID, getErrorMessage, getSenderDisplayName, getMessagePreview, withToast } from "./utils";
 
 export type InboxFilter = "all" | "inbox" | "primary" | "low-priority" | "archive";
 export type ChatTypeFilter = "any" | "single" | "group";
@@ -49,6 +47,17 @@ export interface ChatFilters {
   includeMuted: boolean;
 }
 
+export function InboxDropdown({ value, onChange }: { value: InboxFilter; onChange: (value: InboxFilter) => void }) {
+  return (
+    <List.Dropdown tooltip="Inbox" value={value} onChange={(v) => onChange(v as InboxFilter)}>
+      <List.Dropdown.Item title="All" value="all" />
+      <List.Dropdown.Item title="Inbox" value="inbox" />
+      <List.Dropdown.Item title="Low Priority" value="low-priority" />
+      <List.Dropdown.Item title="Archive" value="archive" />
+    </List.Dropdown>
+  );
+}
+
 const recentDefaultFilters: ChatFilters = {
   inbox: "inbox",
   type: "any",
@@ -56,17 +65,7 @@ const recentDefaultFilters: ChatFilters = {
   includeMuted: true,
 };
 
-const getErrorMessage = (error: unknown) => (error instanceof Error ? error.message : String(error));
 
-/** Build a preview string for a message, considering text, attachments, and reactions. */
-const getMessagePreview = (message: BeeperDesktop.Message): string => {
-  const text = message.text?.trim();
-  if (text && text.length > 0) return text;
-  const reactions = formatReactionsShort(message.reactions);
-  if (reactions) return `Reacted ${reactions}`;
-  if (message.attachments && message.attachments.length > 0) return "Attachment";
-  return "Message";
-};
 
 export type ChatInbox = "all" | "inbox" | "low-priority" | "archive";
 export type IndexedChat = { chat: BeeperDesktop.Chat; inbox: ChatInbox; searchFields: ChatSearchFields };
@@ -576,16 +575,7 @@ export function ChatListView({
   });
 
   const inboxDropdown = (
-    <List.Dropdown
-      tooltip="Inbox"
-      value={filters.inbox}
-      onChange={(value) => setFilters((prev) => ({ ...prev, inbox: value as InboxFilter }))}
-    >
-      <List.Dropdown.Item title="All" value="all" />
-      <List.Dropdown.Item title="Inbox" value="inbox" />
-      <List.Dropdown.Item title="Low Priority" value="low-priority" />
-      <List.Dropdown.Item title="Archive" value="archive" />
-    </List.Dropdown>
+    <InboxDropdown value={filters.inbox} onChange={(inbox) => setFilters((prev) => ({ ...prev, inbox }))} />
   );
 
   const toggleFilter = (key: "unreadOnly" | "includeMuted") => setFilters((prev) => ({ ...prev, [key]: !prev[key] }));
@@ -610,20 +600,17 @@ export function ChatListView({
     });
     if (!confirmed) return;
 
-    const toast = await showToast({
-      style: Toast.Style.Animated,
-      title: archived ? "Archiving chat" : "Unarchiving chat",
-    });
-    try {
-      await archiveChat(chat.id, archived);
-      toast.style = Toast.Style.Success;
-      toast.title = archived ? "Chat archived" : "Chat restored";
-      void refreshIndex("full");
-    } catch (err) {
-      toast.style = Toast.Style.Failure;
-      toast.title = "Chat update failed";
-      toast.message = getErrorMessage(err);
-    }
+    await withToast(
+      async () => {
+        await archiveChat(chat.id, archived);
+        void refreshIndex("full");
+      },
+      {
+        loading: archived ? "Archiving chat" : "Unarchiving chat",
+        success: archived ? "Chat archived" : "Chat restored",
+        failure: "Chat update failed",
+      },
+    );
   };
 
   const clearReminder = async (chat: BeeperDesktop.Chat) => {
@@ -634,32 +621,18 @@ export function ChatListView({
     });
     if (!confirmed) return;
 
-    const toast = await showToast({ style: Toast.Style.Animated, title: "Dismissing reminder" });
-    try {
-      await deleteChatReminder(chat.id);
-      toast.style = Toast.Style.Success;
-      toast.title = "Reminder dismissed";
-    } catch (err) {
-      toast.style = Toast.Style.Failure;
-      toast.title = "Failed to dismiss reminder";
-      toast.message = getErrorMessage(err);
-    }
+    await withToast(() => deleteChatReminder(chat.id), {
+      loading: "Dismissing reminder",
+      success: "Reminder dismissed",
+      failure: "Failed to dismiss reminder",
+    });
   };
 
   const setQuickReminder = async (chat: BeeperDesktop.Chat, remindAt: Date, label: string) => {
-    const toast = await showToast({ style: Toast.Style.Animated, title: `Setting reminder (${label})` });
-    try {
-      await createChatReminder(chat.id, {
-        remindAtMs: remindAt.getTime(),
-        dismissOnIncomingMessage: false,
-      });
-      toast.style = Toast.Style.Success;
-      toast.title = "Reminder set";
-    } catch (err) {
-      toast.style = Toast.Style.Failure;
-      toast.title = "Reminder failed";
-      toast.message = getErrorMessage(err);
-    }
+    await withToast(
+      () => createChatReminder(chat.id, { remindAtMs: remindAt.getTime(), dismissOnIncomingMessage: false }),
+      { loading: `Setting reminder (${label})`, success: "Reminder set", failure: "Reminder failed" },
+    );
   };
 
   const pinnedChats = showPinnedSection ? chats.filter((chat) => chat.isPinned) : [];
@@ -1009,7 +982,7 @@ export function ChatThread({ chat }: { chat: BeeperDesktop.Chat }) {
           const reactionsShort = formatReactionsShort(message.reactions);
           const reactionsDetailed = formatReactionsDetailed(message.reactions, nameMap);
           const timestamp = parseDate(message.timestamp);
-          const sender = message.senderName || (message.isSender ? "You" : "Unknown");
+          const sender = getSenderDisplayName(message);
           const messageID = getMessageID(message);
 
           return (
@@ -1176,13 +1149,13 @@ function MessageActions({
   );
 }
 
-function MessageDetail({ chat, message }: { chat: BeeperDesktop.Chat; message: BeeperDesktop.Message }) {
+export function MessageDetail({ chat, message }: { chat?: BeeperDesktop.Chat; message: BeeperDesktop.Message }) {
   const messageID = getMessageID(message);
+  const sender = getSenderDisplayName(message);
+  const chatLine = chat ? `**Chat:** ${chat.title || "Chat"}\n` : "";
   return (
     <Detail
-      markdown={`# Message from ${message.senderName || (message.isSender ? "You" : "Unknown")}\n\n**Chat:** ${
-        chat.title || "Chat"
-      }\n**Message ID:** ${messageID}\n**Timestamp:** ${
+      markdown={`# Message from ${sender}\n\n${chatLine}**Message ID:** ${messageID}\n**Timestamp:** ${
         message.timestamp || "N/A"
       }\n**Text:**\n${message.text || "—"}\n`}
     />
@@ -1222,17 +1195,13 @@ export function ComposeMessageForm({
         return;
       }
 
-      const toast = await showToast({ style: Toast.Style.Animated, title: "Sending message" });
-      try {
-        await sendMessage(chat.id, { text, replyToMessageID });
-        toast.style = Toast.Style.Success;
-        toast.title = "Message sent";
+      const result = await withToast(
+        () => sendMessage(chat.id, { text, replyToMessageID }),
+        { loading: "Sending message", success: "Message sent", failure: "Message failed" },
+      );
+      if (result !== undefined) {
         await removeDraft();
         pop();
-      } catch (err) {
-        toast.style = Toast.Style.Failure;
-        toast.title = "Message failed";
-        toast.message = getErrorMessage(err);
       }
     },
   });
@@ -1297,17 +1266,11 @@ function EditMessageForm({ chat, message }: { chat: BeeperDesktop.Chat; message:
         return;
       }
 
-      const toast = await showToast({ style: Toast.Style.Animated, title: "Updating message" });
-      try {
-        await updateMessage(chat.id, messageID, { text });
-        toast.style = Toast.Style.Success;
-        toast.title = "Message updated";
-        pop();
-      } catch (err) {
-        toast.style = Toast.Style.Failure;
-        toast.title = "Update failed";
-        toast.message = getErrorMessage(err);
-      }
+      const result = await withToast(
+        () => updateMessage(chat.id, messageID, { text }),
+        { loading: "Updating message", success: "Message updated", failure: "Update failed" },
+      );
+      if (result !== undefined) pop();
     },
   });
 
@@ -1325,7 +1288,7 @@ function EditMessageForm({ chat, message }: { chat: BeeperDesktop.Chat; message:
   );
 }
 
-export function ReminderForm({ chat }: { chat: BeeperDesktop.Chat }) {
+function ReminderForm({ chat }: { chat: BeeperDesktop.Chat }) {
   const { pop } = useNavigation();
   const { handleSubmit, itemProps } = useForm<{ remindAt: Date; dismissOnIncoming: boolean }>({
     initialValues: {
@@ -1333,21 +1296,15 @@ export function ReminderForm({ chat }: { chat: BeeperDesktop.Chat }) {
       dismissOnIncoming: false,
     },
     onSubmit: async (values) => {
-      const remindAtMs = values.remindAt.getTime();
-      const toast = await showToast({ style: Toast.Style.Animated, title: "Setting reminder" });
-      try {
-        await createChatReminder(chat.id, {
-          remindAtMs,
-          dismissOnIncomingMessage: values.dismissOnIncoming,
-        });
-        toast.style = Toast.Style.Success;
-        toast.title = "Reminder set";
-        pop();
-      } catch (err) {
-        toast.style = Toast.Style.Failure;
-        toast.title = "Reminder failed";
-        toast.message = getErrorMessage(err);
-      }
+      const result = await withToast(
+        () =>
+          createChatReminder(chat.id, {
+            remindAtMs: values.remindAt.getTime(),
+            dismissOnIncomingMessage: values.dismissOnIncoming,
+          }),
+        { loading: "Setting reminder", success: "Reminder set", failure: "Reminder failed" },
+      );
+      if (result !== undefined) pop();
     },
   });
 
@@ -1366,7 +1323,7 @@ export function ReminderForm({ chat }: { chat: BeeperDesktop.Chat }) {
   );
 }
 
-export function ChatDetails({ chat }: { chat: BeeperDesktop.Chat }) {
+function ChatDetails({ chat }: { chat: BeeperDesktop.Chat }) {
   const { data, isLoading } = useBeeperDesktop(async () => {
     return retrieveChat(chat.id, { maxParticipantCount: 50 });
   });

@@ -25,9 +25,9 @@ import {
   searchMessages,
   useBeeperDesktop,
 } from "./api";
-import { ChatThread, ComposeMessageForm, toApiInbox, type ChatFilters, type InboxFilter } from "./chat";
+import { ChatThread, ComposeMessageForm, InboxDropdown, MessageDetail, toApiInbox, type ChatFilters, type InboxFilter } from "./chat";
 import { formatReactionsShort, formatReactionsDetailed } from "./reactions";
-import { parseDate, getMessageID, getBeeperAppPath } from "./utils";
+import { parseDate, getMessageID, getMessagePreview, getSenderDisplayName, getBeeperAppPath } from "./utils";
 
 type SenderFilter = "any" | "me" | "others";
 
@@ -240,17 +240,9 @@ function SearchMessagesCommand(props: LaunchProps<{ launchContext?: SearchMessag
       ...partial,
     }));
 
+
   const inboxDropdown = (
-    <List.Dropdown
-      tooltip="Inbox"
-      value={filters.inbox}
-      onChange={(value) => setFilters((prev) => ({ ...prev, inbox: value as InboxFilter }))}
-    >
-      <List.Dropdown.Item title="All" value="all" />
-      <List.Dropdown.Item title="Inbox" value="inbox" />
-      <List.Dropdown.Item title="Low Priority" value="low-priority" />
-      <List.Dropdown.Item title="Archive" value="archive" />
-    </List.Dropdown>
+    <InboxDropdown value={filters.inbox} onChange={(inbox) => setFilters((prev) => ({ ...prev, inbox }))} />
   );
 
   // Build a participant name lookup from message senders
@@ -275,15 +267,14 @@ function SearchMessagesCommand(props: LaunchProps<{ launchContext?: SearchMessag
       {messages
         .filter((m) => !!(m.text?.trim()) || (m.attachments && m.attachments.length > 0))
         .map((message) => {
-          const text = message.text?.trim();
-          const preview = text && text.length > 0 ? text : "Attachment";
+          const preview = getMessagePreview(message);
           const enrichedReactions = reactionsMap[message.id] ?? message.reactions;
           const reactionsShort = formatReactionsShort(enrichedReactions);
           const reactionsDetailed = formatReactionsDetailed(enrichedReactions, nameMap);
           const timestamp = parseDate(message.timestamp);
           const chatInfo = (chatMeta as Record<string, { title?: string; localChatID?: string }>)[message.chatID];
           const chatTitle = chatInfo?.title;
-          const sender = message.senderName || (message.isSender ? "You" : "Unknown");
+          const sender = getSenderDisplayName(message);
           const subtitle = chatTitle ? `${chatTitle} • ${sender}` : sender;
           const messageID = getMessageID(message);
           const messageLink = getRaycastFocusLink({ chatID: message.chatID, messageID });
@@ -535,17 +526,6 @@ function ComposeMessageById({ chatID, replyToMessageID }: { chatID: string; repl
   }
 
   return <ComposeMessageForm chat={chat} replyToMessageID={replyToMessageID} />;
-}
-
-function MessageDetail({ message }: { message: BeeperDesktop.Message }) {
-  const messageID = getMessageID(message);
-  return (
-    <Detail
-      markdown={`# Message from ${message.senderName || (message.isSender ? "You" : "Unknown")}\n\n**Message ID:** ${
-        messageID
-      }\n**Timestamp:** ${message.timestamp || "N/A"}\n**Text:**\n${message.text || "—"}\n`}
-    />
-  );
 }
 
 export default withAccessToken(createBeeperOAuth())(SearchMessagesCommand);

@@ -11,7 +11,7 @@ import {
   searchContacts,
 } from "./api";
 import { ChatThread } from "./chat";
-import { getBeeperAppPath } from "./utils";
+import { getBeeperAppPath, getErrorMessage } from "./utils";
 
 const getContactSortName = (contact: {
   fullName?: string;
@@ -247,7 +247,7 @@ export function ContactsView() {
                     } catch (error) {
                       toast.style = Toast.Style.Failure;
                       toast.title = "Open chat failed";
-                      toast.message = error instanceof Error ? error.message : String(error);
+                      toast.message = getErrorMessage(error);
                     }
                   }}
                 />
