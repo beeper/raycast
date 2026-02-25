@@ -8,8 +8,9 @@ function UnreadChatsCommand() {
       stateKey="chat:unread"
       navigationTitle="Unread Chats"
       searchPlaceholder="Search unread chats"
+      showPinnedSection={false}
       defaultFilters={{
-        inbox: "primary",
+        inbox: "inbox",
         type: "any",
         unreadOnly: true,
         includeMuted: true,

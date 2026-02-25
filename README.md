@@ -32,10 +32,11 @@ This extension includes AI tools for natural language actions:
 Before using this extension, you **must enable the Beeper Desktop API** in your Beeper Desktop settings:
 
 1. Open Beeper Desktop
-2. Go to **Settings** (gear icon in the sidebar)
-3. Navigate to **Developers**
-4. Enable **Beeper Desktop API**
-5. The API should run on port `23373`
+2. Go to **Settings** (⚙️ icon in the sidebar)
+3. Navigate to **Developers** section
+4. Find the **Beeper Desktop API** section
+5. Click the toggle to enable "Start on launch"
+6. The API should now be running on port 23373 (you'll see "Running with MCP on port 23373")
 
 Once enabled, you can use the Raycast extension to interact with your Beeper chats and accounts.
 

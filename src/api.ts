@@ -74,7 +74,7 @@ export function getBeeperDesktop(): BeeperDesktop {
     clientInstance = new BeeperDesktop({
       accessToken,
       baseURL: baseURL,
-      logLevel: "debug",
+      logLevel: "info",
     });
     lastBaseURL = baseURL;
     lastAccessToken = accessToken;

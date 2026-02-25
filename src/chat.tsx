@@ -34,7 +34,7 @@ import {
   useBeeperDesktop,
 } from "./api";
 
-type InboxFilter = "all" | "primary" | "low-priority" | "archive";
+type InboxFilter = "all" | "inbox" | "primary" | "low-priority" | "archive";
 type ChatTypeFilter = "any" | "single" | "group";
 
 interface ChatFilters {
@@ -120,8 +120,7 @@ const summarizeChatForIndex = (chat: BeeperDesktop.Chat): BeeperDesktop.Chat => 
   network: chat.network ?? "",
   participants: {
     hasMore: false,
-    items:
-      MAX_PARTICIPANTS_STORED > 0 ? (chat.participants?.items ?? []).slice(0, MAX_PARTICIPANTS_STORED) : [],
+    items: MAX_PARTICIPANTS_STORED > 0 ? (chat.participants?.items ?? []).slice(0, MAX_PARTICIPANTS_STORED) : [],
     total: chat.participants?.total ?? 0,
   },
   type: chat.type,
@@ -315,6 +314,7 @@ type ChatListViewProps = {
   navigationTitle: string;
   searchPlaceholder: string;
   defaultFilters: ChatFilters;
+  showPinnedSection?: boolean;
   showSmartSections?: boolean;
   showUnreadSection?: boolean;
 };
@@ -324,6 +324,7 @@ export function ChatListView({
   navigationTitle,
   searchPlaceholder,
   defaultFilters,
+  showPinnedSection = true,
   showSmartSections = false,
   showUnreadSection = true,
 }: ChatListViewProps) {
@@ -492,8 +493,9 @@ export function ChatListView({
     return new ThreadSearchIndex(collection);
   }, [indexState.items, tokens.length]);
   const chats = useMemo(() => {
+    const normalizedInbox = filters.inbox === "inbox" ? "primary" : filters.inbox;
     const filtered = indexState.items.filter((item) => {
-      if (filters.inbox !== "all" && item.inbox !== filters.inbox) return false;
+      if (normalizedInbox !== "all" && item.inbox !== normalizedInbox) return false;
       if (!filters.includeMuted && item.chat.isMuted) return false;
       if (filters.unreadOnly && (item.chat.unreadCount ?? 0) === 0) return false;
       if (normalizedType !== "any" && item.chat.type !== normalizedType) return false;
@@ -873,7 +875,9 @@ export function ChatListView({
       isShowingDetail={isShowingDetail}
       throttle
     >
-      {pinnedChats.length > 0 && <List.Section title="Pinned">{pinnedChats.map(renderChatItem)}</List.Section>}
+      {showPinnedSection && pinnedChats.length > 0 && (
+        <List.Section title="Pinned">{pinnedChats.map(renderChatItem)}</List.Section>
+      )}
       {showUnread && <List.Section title="Unread">{unreadChats.map(renderChatItem)}</List.Section>}
       {showSections && recentChats.length > 0 && (
         <List.Section title="Recent">{recentChats.map(renderChatItem)}</List.Section>
