@@ -52,6 +52,12 @@
       "title": "Search Recent Messages",
       "description": "Search recent messages across Beeper chats",
       "mode": "view"
+    },
+    {
+      "name": "list-accounts",
+      "title": "Connected Accounts",
+      "description": "View all connected messaging services",
+      "mode": "view"
     }
   ],
   "preferences": [
