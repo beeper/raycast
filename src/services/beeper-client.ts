@@ -1,7 +1,7 @@
 import BeeperDesktop from "@beeper/desktop-api";
 import { getPreferenceValues, LocalStorage } from "@raycast/api";
 import { getAccessToken } from "@raycast/utils";
-import { TOKEN_STORAGE_KEY } from "../api";
+import { createBeeperOAuth, TOKEN_STORAGE_KEY } from "../api";
 
 interface Preferences {
   baseUrl?: string;
@@ -73,4 +73,10 @@ export async function checkBeeperConnection(): Promise<{ connected: boolean; err
 
     return { connected: false, error: errorMessage };
   }
+}
+
+export async function clearStoredAuthentication() {
+  const oauth = createBeeperOAuth();
+  await oauth.client.removeTokens();
+  await LocalStorage.removeItem(TOKEN_STORAGE_KEY);
 }

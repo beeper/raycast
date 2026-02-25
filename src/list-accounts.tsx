@@ -1,7 +1,7 @@
 import { Action, ActionPanel, Color, Icon, List, Toast, getPreferenceValues, showToast } from "@raycast/api";
 import { useCachedPromise, withAccessToken } from "@raycast/utils";
 import { createBeeperOAuth } from "./api";
-import { getBeeperClient, checkBeeperConnection } from "./services/beeper-client";
+import { clearStoredAuthentication, getBeeperClient, checkBeeperConnection } from "./services/beeper-client";
 import { MOCK_ACCOUNTS } from "./utils/mock-data";
 import { getServiceDisplayName, getServiceIcon } from "./utils/service-icons";
 import { BeeperAccount, parseService } from "./utils/types";
@@ -69,6 +69,21 @@ function ListAccountsCommand() {
           actions={
             <ActionPanel>
               <Action title="Retry" icon={Icon.ArrowClockwise} onAction={revalidate} />
+              {error.message.includes("Authentication failed") && (
+                <Action
+                  title="Reconnect Authorization"
+                  icon={Icon.Key}
+                  onAction={async () => {
+                    await clearStoredAuthentication();
+                    await showToast({
+                      style: Toast.Style.Success,
+                      title: "Authorization cleared",
+                      message: "Run any Beeper command to authorize again.",
+                    });
+                    revalidate();
+                  }}
+                />
+              )}
             </ActionPanel>
           }
         />
