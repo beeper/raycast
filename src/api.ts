@@ -107,9 +107,11 @@ export const retrieveChat = async (
 };
 
 export const archiveChat = async (chatID: string, archived?: boolean) => {
-  return getBeeperDesktop().post(`/v1/chats/${encodeURIComponent(chatID)}/archive`, {
-    body: { archived },
-  });
+  await getBeeperDesktop()
+    .post(`/v1/chats/${encodeURIComponent(chatID)}/archive`, {
+      body: { archived },
+    })
+    .asResponse();
 };
 
 export const createChatReminder = async (
