@@ -16,8 +16,8 @@ import {
 } from "@raycast/api";
 import { useCachedState, useFrecencySorting, useForm, useLocalStorage, withAccessToken } from "@raycast/utils";
 import BeeperDesktop from "@beeper/desktop-api";
-import Fuse from "fuse.js";
-import { useEffect, useMemo, useRef, useState } from "react";
+import Fuse, { type Expression } from "fuse.js";
+import { type ComponentProps, useEffect, useMemo, useRef, useState } from "react";
 import {
   archiveChat,
   createBeeperOAuth,
@@ -261,7 +261,7 @@ class ThreadSearchIndex {
 
     for (const searchTerm of searchTerms) {
       for (const property of properties) {
-        const results = this.fuse.search({ [`searchFields.${property}`]: searchTerm } as Fuse.Expression);
+        const results = this.fuse.search({ [`searchFields.${property}`]: searchTerm } as Expression);
         for (const result of results) {
           if (result.score == null) continue;
           const match = getOrCreateMatch(result.item.id);
@@ -708,7 +708,7 @@ export function ChatListView({
       ...(chat.unreadCount > 0 ? [{ text: `${chat.unreadCount} unread` }] : []),
       ...(chat.isPinned ? [{ icon: Icon.Pin }] : []),
       ...(chat.isMuted ? [{ icon: Icon.SpeakerOff }] : []),
-      ...(chat.isArchived ? [{ icon: Icon.Archive }] : []),
+      ...(chat.isArchived ? [{ icon: Icon.Tray }] : []),
       ...(lastActivity ? [{ date: lastActivity }] : []),
     ];
 
@@ -822,7 +822,7 @@ export function ChatListView({
               <Action.Push title="Show Details" icon={Icon.Info} target={<ChatDetails chat={chat} />} />
               <Action
                 title={chat.isArchived ? "Unarchive" : "Archive"}
-                icon={chat.isArchived ? Icon.Tray : Icon.Archive}
+                icon={chat.isArchived ? Icon.Tray : Icon.ArrowDown}
                 onAction={() => handleArchiveChat(chat, !chat.isArchived)}
               />
             </ActionPanel.Section>
@@ -837,8 +837,8 @@ export function ChatListView({
                 shortcut={{ modifiers: ["cmd"], key: "r" }}
                 onAction={() => refreshIndex("full")}
               />
-              {showSmartSections && (
-                <Action title="Reset Smart Ranking" icon={Icon.Repeat} onAction={() => resetRanking()} />
+              {showSmartSections && chats.length > 0 && (
+                <Action title="Reset Smart Ranking" icon={Icon.Repeat} onAction={() => resetRanking(chats[0])} />
               )}
               {showSmartSections && (
                 <Action title="Clear Recent Chats" icon={Icon.Trash} onAction={() => setRecentChatIDs([])} />
@@ -1084,7 +1084,7 @@ function MessageActions({
       <ActionPanel.Section title="Message">
         <Action.Push
           title="Reply to Message"
-          icon={Icon.ArrowTurnDown}
+          icon={Icon.ArrowDown}
           target={<ComposeMessageForm chat={chat} replyToMessageID={messageID} />}
         />
         <Action.Push title="New Message" icon={Icon.Pencil} target={<ComposeMessageForm chat={chat} />} />
@@ -1309,7 +1309,7 @@ export function ReminderForm({ chat }: { chat: BeeperDesktop.Chat }) {
         </ActionPanel>
       }
     >
-      <Form.DatePicker {...itemProps.remindAt} title="Remind At" />
+      <Form.DatePicker {...(itemProps.remindAt as ComponentProps<typeof Form.DatePicker>)} title="Remind At" />
       <Form.Checkbox {...itemProps.dismissOnIncoming} label="Dismiss on incoming message" />
     </Form>
   );
