@@ -1,5 +1,5 @@
 import BeeperDesktop from "@beeper/desktop-api";
-import { closeMainWindow, getPreferenceValues, OAuth, showHUD } from "@raycast/api";
+import { closeMainWindow, getPreferenceValues, LocalStorage, OAuth, showHUD } from "@raycast/api";
 import { OAuthService, usePromise, getAccessToken } from "@raycast/utils";
 import { readFile } from "node:fs/promises";
 import { basename } from "node:path";
@@ -12,6 +12,7 @@ interface Preferences {
 let clientInstance: BeeperDesktop | null = null;
 let lastBaseURL: string | null = null;
 let lastAccessToken: string | null = null;
+export const TOKEN_STORAGE_KEY = "beeper-oauth-token";
 
 const getPreferences = () => getPreferenceValues<Preferences>();
 
@@ -56,10 +57,11 @@ export function createBeeperOAuth() {
     tokenUrl: `${baseURL}/oauth/token`,
     refreshTokenUrl: `${baseURL}/oauth/token`,
     bodyEncoding: "url-encoded",
-    onAuthorize: ({ token }) => {
+    onAuthorize: async ({ token }) => {
       // Reset client when new token is obtained
       clientInstance = null;
       lastAccessToken = token;
+      await LocalStorage.setItem(TOKEN_STORAGE_KEY, token);
     },
   });
 }
