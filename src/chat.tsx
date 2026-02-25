@@ -337,7 +337,6 @@ type ChatListViewProps = {
   showPinnedSection?: boolean;
   showSmartSections?: boolean;
   showUnreadSection?: boolean;
-  showPinnedSection?: boolean;
 };
 
 export function ChatListView({
@@ -348,7 +347,6 @@ export function ChatListView({
   showPinnedSection = true,
   showSmartSections = false,
   showUnreadSection = true,
-  showPinnedSection = true,
 }: ChatListViewProps) {
   const [searchText, setSearchText] = useState("");
   const [filters, setFilters] = useCachedState<ChatFilters>(`${stateKey}:filters`, defaultFilters);

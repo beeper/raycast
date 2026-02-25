@@ -302,7 +302,6 @@ export const searchChats = async (params: {
   direction?: "after" | "before";
   inbox?: "primary" | "low-priority" | "archive";
   includeMuted?: boolean;
-  limit?: number;
   lastActivityAfter?: string;
   lastActivityBefore?: string;
   limit?: number;
