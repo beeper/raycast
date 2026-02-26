@@ -27,7 +27,8 @@ const NETWORK_ICON_MAP: Record<string, string> = {
  * @param network - The network name (case-insensitive, spaces/slashes/dashes are ignored)
  * @returns The corresponding network icon image
  */
-export function getNetworkIcon(network: string): Image.ImageLike {
+export function getNetworkIcon(network: string | undefined | null): Image.ImageLike {
+  if (!network) return Icon.Message;
   const networkLower = network.toLowerCase().replace(/[/\s-]/g, "");
   const iconFilename = NETWORK_ICON_MAP[networkLower];
 

@@ -1,7 +1,7 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { ActionPanel, Detail, List, Action, Icon, Image, showToast, Toast } from "@raycast/api";
-import { withAccessToken } from "@raycast/utils";
-import { useBeeperDesktop, getBeeperDesktop, createBeeperOAuth, focusApp } from "./api";
+import { useCachedPromise, withAccessToken } from "@raycast/utils";
+import { useBeeperDesktop, getBeeperDesktop, createBeeperOAuth, focusApp, listAccounts } from "./api";
 import { t } from "./locales";
 import { getChatIcon } from "./utils/chatIcon";
 
@@ -19,6 +19,9 @@ function ListChatsCommand() {
   const [cursor, setCursor] = useState<string | null>(null);
   const [hasMore, setHasMore] = useState(true);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
+
+  const { data: accounts = [] } = useCachedPromise(listAccounts, [], { keepPreviousData: true });
+  const accountMap = useMemo(() => new Map(accounts.map((a) => [a.accountID, a])), [accounts]);
 
   const { isLoading } = useBeeperDesktop(
     async (client, query) => {
@@ -73,13 +76,28 @@ function ListChatsCommand() {
       onSearchTextChange={setSearchText}
       throttle
     >
-      {chats.map((chat) => (
+      {chats.map((chat) => {
+        const account = accountMap.get(chat.accountID);
+        const accountLabel = account
+          ? `${account.network || translations.commands.contacts.accountFallback} • ${
+              account.user?.fullName ||
+              account.user?.username ||
+              account.user?.email ||
+              account.user?.phoneNumber ||
+              account.accountID
+            }`
+          : undefined;
+        return (
         <List.Item
           key={chat.id}
           icon={getChatIcon(chat)}
           title={chat.title || translations.common.unnamedChat}
           subtitle={chat.network}
-          accessories={[{ text: chat.type }, ...(chat.lastActivity ? [{ date: new Date(chat.lastActivity) }] : [])]}
+          accessories={[
+            ...(accountLabel ? [{ tag: accountLabel }] : []),
+            { text: chat.type },
+            ...(chat.lastActivity ? [{ date: new Date(chat.lastActivity) }] : []),
+          ]}
           actions={
             <ActionPanel>
               <Action
@@ -110,7 +128,8 @@ function ListChatsCommand() {
             </ActionPanel>
           }
         />
-      ))}
+      );
+      })}
       {!isLoading && hasMore && chats.length > 0 && (
         <List.Item
           key="load-more"

@@ -1,7 +1,7 @@
 import { List, Icon } from "@raycast/api";
-import { withAccessToken } from "@raycast/utils";
-import { useState } from "react";
-import { createBeeperOAuth, focusApp } from "./api";
+import { useCachedPromise, withAccessToken } from "@raycast/utils";
+import { useState, useMemo } from "react";
+import { createBeeperOAuth, focusApp, listAccounts } from "./api";
 import { t } from "./locales";
 import { ChatListItem } from "./components/ChatListItem";
 import { useChatSearch } from "./hooks/useChatSearch";
@@ -34,6 +34,8 @@ function SearchChatsCommand() {
   const translations = t();
   const [searchText, setSearchText] = useState("");
   const { data: chats = [], isLoading } = useChatSearch(searchText);
+  const { data: accounts = [] } = useCachedPromise(listAccounts, [], { keepPreviousData: true });
+  const accountMap = useMemo(() => new Map(accounts.map((a) => [a.accountID, a])), [accounts]);
 
   return (
     <List
@@ -55,23 +57,36 @@ function SearchChatsCommand() {
           description={translations.commands.searchChats.noResultsDescription}
         />
       ) : (
-        chats.map((chat) => (
-          <ChatListItem
-            key={chat.id}
-            chat={{
-              ...chat,
-              avatarUrl: getAvatarUrl(chat),
-              onOpen: () => focusApp({ chatID: chat.id }),
-            }}
-            translations={translations}
-            accessories={[
-              ...(chat.unreadCount > 0 ? [{ text: translations.common.unreadCount(chat.unreadCount) }] : []),
-              ...(chat.isPinned ? [{ icon: Icon.Pin }] : []),
-              ...(chat.isMuted ? [{ icon: Icon.SpeakerOff }] : []),
-            ]}
-            showDetails={false}
-          />
-        ))
+        chats.map((chat) => {
+          const account = accountMap.get(chat.accountID);
+          const accountLabel = account
+            ? `${account.network || translations.commands.contacts.accountFallback} • ${
+                account.user?.fullName ||
+                account.user?.username ||
+                account.user?.email ||
+                account.user?.phoneNumber ||
+                account.accountID
+              }`
+            : undefined;
+          return (
+            <ChatListItem
+              key={chat.id}
+              chat={{
+                ...chat,
+                avatarUrl: getAvatarUrl(chat),
+                onOpen: () => focusApp({ chatID: chat.id }),
+              }}
+              translations={translations}
+              accessories={[
+                ...(accountLabel ? [{ tag: accountLabel }] : []),
+                ...(chat.unreadCount > 0 ? [{ text: translations.common.unreadCount(chat.unreadCount) }] : []),
+                ...(chat.isPinned ? [{ icon: Icon.Pin }] : []),
+                ...(chat.isMuted ? [{ icon: Icon.SpeakerOff }] : []),
+              ]}
+              showDetails={false}
+            />
+          );
+        })
       )}
     </List>
   );

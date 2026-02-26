@@ -48,6 +48,18 @@
       "title": "Search Messages",
       "description": "Search through your Beeper messages",
       "mode": "view"
+    },
+    {
+      "name": "contacts",
+      "title": "Contacts",
+      "description": "Search contacts across connected Beeper accounts",
+      "mode": "view"
+    },
+    {
+      "name": "search-all",
+      "title": "Search Everything",
+      "description": "Search across all Beeper chats and messages",
+      "mode": "view"
     }
   ],
   "preferences": [
@@ -79,18 +91,22 @@
     }
   ],
   "dependencies": {
-    "@beeper/desktop-api": "^0.1.4",
-    "@raycast/api": "^1.102.6",
-    "@raycast/utils": "^1.17.0"
+    "@beeper/desktop-api": "latest",
+    "@raycast/api": "^1.104.1",
+    "@raycast/utils": "^2.2.2",
+    "fuse.js": "^7.1.0"
   },
   "devDependencies": {
-    "@raycast/eslint-config": "^2.0.4",
-    "@types/node": "22.13.10",
-    "@types/react": "19.0.10",
-    "eslint": "^9.22.0",
-    "prettier": "^3.5.3",
+    "@raycast/eslint-config": "^2.1.1",
+    "@types/node": "22.19.3",
+    "@types/react": "19.2.7",
+    "eslint": "^9.39.2",
+    "prettier": "^3.7.4",
     "simple-icons": "^15.22.0",
-    "typescript": "^5.8.2"
+    "typescript": "^5.9.3"
+  },
+  "overrides": {
+    "minimatch": ">=10.2.1"
   },
   "scripts": {
     "build": "ray build",

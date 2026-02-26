@@ -1,7 +1,9 @@
 import BeeperDesktop from "@beeper/desktop-api";
-import type { AppOpenParams } from "@beeper/desktop-api/resources/app";
 import { closeMainWindow, getPreferenceValues, OAuth, showHUD } from "@raycast/api";
 import { OAuthService, usePromise, getAccessToken } from "@raycast/utils";
+import { readFile } from "node:fs/promises";
+import { basename } from "node:path";
+import { fileURLToPath } from "node:url";
 import { t } from "./locales";
 
 interface Preferences {
@@ -40,7 +42,6 @@ export function createBeeperOAuth() {
     refreshTokenUrl: `${baseURL}/oauth/token`,
     bodyEncoding: "url-encoded",
     onAuthorize: ({ token }) => {
-      // Reset client when new token is obtained
       clientInstance = null;
       lastAccessToken = token;
     },
@@ -49,8 +50,6 @@ export function createBeeperOAuth() {
 
 /**
  * Returns a cached BeeperDesktop client, creating a new instance when the configured base URL or access token has changed.
- *
- * @returns A BeeperDesktop client configured with the current base URL and access token.
  */
 export function getBeeperDesktop(): BeeperDesktop {
   const baseURL = getBaseURL();
@@ -72,9 +71,6 @@ export function getBeeperDesktop(): BeeperDesktop {
 /**
  * Execute an asynchronous operation using the current BeeperDesktop client and return its managed result.
  * The operation will be re-executed whenever any value in the args array changes.
- *
- * @param fn - Function that receives the BeeperDesktop client and args, returns a Promise
- * @param args - Optional array of dependencies that trigger re-execution when changed
  */
 export function useBeeperDesktop<T, A extends unknown[] = []>(
   fn: (client: BeeperDesktop, ...args: A) => Promise<T>,
@@ -83,14 +79,319 @@ export function useBeeperDesktop<T, A extends unknown[] = []>(
   return usePromise((...a: A) => fn(getBeeperDesktop(), ...a), (args ?? []) as A);
 }
 
-export const focusApp = async (params: AppOpenParams = {}) => {
+export const focusApp = async (
+  params: {
+    chatID?: string;
+    draftText?: string;
+    draftAttachmentPath?: string;
+    messageID?: string;
+  } = {},
+) => {
   const translations = t();
   try {
-    await getBeeperDesktop().app.open(params);
+    await getBeeperDesktop().post("/v1/focus", { body: params });
     await closeMainWindow();
     await showHUD(translations.commands.focusApp.successMessage);
   } catch (error) {
     console.error("Failed to focus Beeper Desktop:", error);
     await showHUD(translations.commands.focusApp.errorMessage);
   }
+};
+
+// Deep-link constants
+const RAYCAST_EXTENSION_AUTHOR = "batuhan";
+const RAYCAST_EXTENSION_NAME = "beeper";
+const RAYCAST_FOCUS_COMMAND = "focus-app";
+
+export const getRaycastFocusLink = (
+  params: {
+    chatID?: string;
+    draftText?: string;
+    draftAttachmentPath?: string;
+    messageID?: string;
+  } = {},
+) => {
+  const args = Object.keys(params).length > 0 ? `?arguments=${encodeURIComponent(JSON.stringify(params))}` : "";
+  return `raycast://extensions/${RAYCAST_EXTENSION_AUTHOR}/${RAYCAST_EXTENSION_NAME}/${RAYCAST_FOCUS_COMMAND}${args}`;
+};
+
+// Types
+export type MessageAttachmentInput = {
+  uploadID: string;
+  mimeType?: string;
+  fileName?: string;
+  size?: { width?: number; height?: number };
+  duration?: number;
+  type?: "gif" | "voiceNote" | "sticker";
+};
+
+export type MessageEditInput = {
+  text: string;
+};
+
+export type AssetUploadResponse = {
+  uploadID: string;
+  mimeType?: string;
+  fileName?: string;
+  fileSize?: number;
+  width?: number;
+  height?: number;
+  duration?: number;
+  srcURL?: string;
+};
+
+export type CursorResponse<T> = {
+  items: T[];
+  hasMore?: boolean;
+  newestCursor?: string | null;
+  oldestCursor?: string | null;
+  cursor?: string | null;
+  nextCursor?: string | null;
+};
+
+export type UnifiedSearchMessages = {
+  items?: BeeperDesktop.Message[];
+  chats?: Record<string, BeeperDesktop.Chat>;
+  hasMore?: boolean;
+  newestCursor?: string | null;
+  oldestCursor?: string | null;
+};
+
+export type GlobalSearchResponse = {
+  results?: {
+    chats?: BeeperDesktop.Chat[];
+    in_groups?: BeeperDesktop.Chat[];
+    messages?: UnifiedSearchMessages;
+  };
+};
+
+const normalizeCursorResponse = <T>(result: {
+  items?: T[];
+  hasMore?: boolean;
+  newestCursor?: string | null;
+  oldestCursor?: string | null;
+  cursor?: string | null;
+  nextCursor?: string | null;
+}): CursorResponse<T> => ({
+  items: result.items ?? [],
+  hasMore: result.hasMore,
+  newestCursor: result.newestCursor,
+  oldestCursor: result.oldestCursor,
+  cursor: result.cursor,
+  nextCursor: result.nextCursor,
+});
+
+// Asset helpers
+const getAccessTokenValue = () => getAccessToken().token;
+const getAuthHeaders = () => ({ Authorization: `Bearer ${getAccessTokenValue()}` });
+
+const requestJSON = async <T>(input: RequestInfo | URL, init?: RequestInit): Promise<T> => {
+  const response = await fetch(input, init);
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(text || response.statusText);
+  }
+  return (await response.json()) as T;
+};
+
+export const uploadAssetFromFile = async (filePath: string): Promise<AssetUploadResponse> => {
+  const body = new FormData();
+  const fileName = basename(filePath);
+  const buffer = await readFile(filePath);
+  body.append("file", new File([buffer], fileName));
+  return requestJSON<AssetUploadResponse>(`${getBaseURL()}/v1/assets/upload`, {
+    method: "POST",
+    headers: getAuthHeaders(),
+    body,
+  });
+};
+
+export const uploadAssetFromBase64 = async (params: {
+  content: string;
+  fileName?: string;
+  mimeType?: string;
+}): Promise<AssetUploadResponse> => {
+  return requestJSON<AssetUploadResponse>(`${getBaseURL()}/v1/assets/upload/base64`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...getAuthHeaders(),
+    },
+    body: JSON.stringify({
+      content: params.content,
+      fileName: params.fileName,
+      mimeType: params.mimeType,
+    }),
+  });
+};
+
+export const downloadAsset = async (url: string): Promise<{ srcURL: string }> => {
+  return requestJSON<{ srcURL: string }>(`${getBaseURL()}/v1/assets/download`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...getAuthHeaders(),
+    },
+    body: JSON.stringify({ url }),
+  });
+};
+
+export const resolveFilePathFromSrcURL = (srcURL?: string) => {
+  if (!srcURL) return undefined;
+  if (srcURL.startsWith("file://")) {
+    return fileURLToPath(srcURL);
+  }
+  return undefined;
+};
+
+export const getServeAssetURL = (url: string) => {
+  const encoded = encodeURIComponent(url);
+  return `${getBaseURL()}/v1/assets/serve?url=${encoded}`;
+};
+
+// Chat & Account API functions
+
+export const listAccounts = async (): Promise<BeeperDesktop.Account[]> => {
+  const response = await getBeeperDesktop().get("/v1/accounts");
+  if (Array.isArray(response)) {
+    return response as BeeperDesktop.Account[];
+  }
+  if (response?.items && Array.isArray(response.items)) {
+    return response.items as BeeperDesktop.Account[];
+  }
+  return [];
+};
+
+export const searchContacts = async (accountID: string, query: string) => {
+  const response = await getBeeperDesktop().get(`/v1/accounts/${encodeURIComponent(accountID)}/contacts`, {
+    query: { query },
+  });
+  return response?.items && Array.isArray(response.items) ? (response.items as BeeperDesktop.User[]) : [];
+};
+
+export const listChats = async (params?: {
+  accountIDs?: string[];
+  cursor?: string | null;
+  direction?: "after" | "before";
+}): Promise<CursorResponse<BeeperDesktop.Chat>> => {
+  const response = await getBeeperDesktop().get("/v1/chats", { query: params });
+  return normalizeCursorResponse(response);
+};
+
+export const searchChats = async (params: {
+  accountIDs?: string[];
+  cursor?: string | null;
+  direction?: "after" | "before";
+  inbox?: "primary" | "low-priority" | "archive";
+  includeMuted?: boolean;
+  lastActivityAfter?: string;
+  lastActivityBefore?: string;
+  participantQuery?: string;
+  query?: string;
+  type?: "single" | "group" | "channel" | "any";
+  unreadOnly?: boolean;
+}) => {
+  const response = await getBeeperDesktop().get("/v1/chats/search", { query: params });
+  return normalizeCursorResponse(response);
+};
+
+export const createChat = async (body: {
+  accountID: string;
+  participantIDs: string[];
+  type: "single" | "group";
+  title?: string;
+  messageText?: string;
+}) => {
+  return getBeeperDesktop().post("/v1/chats", { body });
+};
+
+export const retrieveChat = async (chatID: string, options?: { maxParticipantCount?: number | null }) => {
+  return getBeeperDesktop().get(`/v1/chats/${encodeURIComponent(chatID)}`, {
+    query: options,
+  });
+};
+
+export const archiveChat = async (chatID: string, archived?: boolean) => {
+  return getBeeperDesktop().post(`/v1/chats/${encodeURIComponent(chatID)}/archive`, {
+    body: { archived },
+  });
+};
+
+export const createChatReminder = async (
+  chatID: string,
+  reminder: { remindAtMs: number; dismissOnIncomingMessage?: boolean },
+) => {
+  return getBeeperDesktop().post(`/v1/chats/${encodeURIComponent(chatID)}/reminders`, {
+    body: reminder,
+  });
+};
+
+export const deleteChatReminder = async (chatID: string) => {
+  return getBeeperDesktop().delete(`/v1/chats/${encodeURIComponent(chatID)}/reminders`);
+};
+
+export const listChatMessages = async (
+  chatID: string,
+  params?: { cursor?: string | null; direction?: "after" | "before"; limit?: number },
+): Promise<CursorResponse<BeeperDesktop.Message>> => {
+  const response = await getBeeperDesktop().get(`/v1/chats/${encodeURIComponent(chatID)}/messages`, {
+    query: params,
+  });
+  return normalizeCursorResponse(response);
+};
+
+export const searchMessages = async (params: {
+  query?: string;
+  chatIDs?: string[];
+  sender?: "me" | "others" | string;
+  accountIDs?: string[];
+  chatType?: "group" | "single";
+  includeMuted?: boolean;
+  excludeLowPriority?: boolean | null;
+  mediaTypes?: Array<"any" | "video" | "image" | "link" | "file">;
+  dateAfter?: string;
+  dateBefore?: string;
+  cursor?: string | null;
+  direction?: "after" | "before";
+  limit?: number;
+}): Promise<CursorResponse<BeeperDesktop.Message>> => {
+  const response = await getBeeperDesktop().get("/v1/messages/search", { query: params });
+  return normalizeCursorResponse(response);
+};
+
+export const searchAll = async (params: { query: string }): Promise<GlobalSearchResponse> => {
+  return getBeeperDesktop().get("/v1/search", { query: params });
+};
+
+export const sendMessage = async (
+  chatID: string,
+  message: { text?: string; replyToMessageID?: string; attachment?: MessageAttachmentInput },
+) => {
+  return getBeeperDesktop().post(`/v1/chats/${encodeURIComponent(chatID)}/messages`, { body: message });
+};
+
+export const updateMessage = async (chatID: string, messageID: string, update: MessageEditInput) => {
+  return getBeeperDesktop().put(`/v1/chats/${encodeURIComponent(chatID)}/messages/${encodeURIComponent(messageID)}`, {
+    body: update,
+  });
+};
+
+export const downloadMessageAttachments = async (params: {
+  chatID: string;
+  messageID: string;
+  url?: string;
+}): Promise<{ success: boolean; filePath?: string; error?: string }> => {
+  if (params.url) {
+    try {
+      const response = await downloadAsset(params.url);
+      const filePath = resolveFilePathFromSrcURL(response.srcURL);
+      if (!filePath) {
+        return { success: false, error: "Downloaded asset did not return a local file path" };
+      }
+      return { success: true, filePath };
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : String(error) };
+    }
+  }
+  throw new Error("Attachment download not supported by this SDK version");
 };
