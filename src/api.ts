@@ -100,7 +100,6 @@ export const focusApp = async (
     await closeMainWindow();
     await showHUD("Beeper Desktop focused");
   } catch (error) {
-    console.error("Failed to focus Beeper Desktop:", error);
     await showHUD("Failed to focus Beeper Desktop");
   }
 };

@@ -1,14 +1,19 @@
 # Beeper Changelog
 
-## [Unreleased]
+## [Initial Version] - 2025-02-25
 
 ### Added
 
-- AI tools surface in extension metadata (`tools` + `ai.evals`)
-- Tool handlers for `open-chat`, `send-message`, `list-accounts`, `search-messages`, `summarize-unread`, and `summarize-messages`
-- Fuzzy contact/chat intent matching with suggestion messages
-- Service normalization and display helper mappings
-- Non-UI auth fallback for tools via `LocalStorage` token fallback
-- Optional `useMockData` preference and mock datasets for demos/screenshots
-- Connected Accounts command UI (`list-accounts`)
-- Additional metadata screenshot: `metadata/beeper-3.png`
+- Recent Chats command with filtering, search, and chat detail view
+- Unread Chats command for quick unread message overview
+- Contacts command with cross-account search
+- Search Recent Messages command with sender/date filters
+- Connected Accounts command to view linked messaging services
+- Open Beeper no-view command to bring Beeper Desktop to foreground
+- AI tools: open-chat, send-message, list-accounts, search-messages, summarize-unread, summarize-messages
+- PKCE OAuth authentication with Beeper Desktop API
+- Local chat indexing with Fuse.js for fast fuzzy search
+- Mock data mode for demos and screenshots
+- Chat actions: send messages, reply, archive, set reminders, copy links
+- Message attachments: upload files and images
+- Frecency-based chat sorting
