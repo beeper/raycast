@@ -8,6 +8,8 @@ import {
   LaunchProps,
   List,
   openExtensionPreferences,
+  showToast,
+  Toast,
 } from "@raycast/api";
 import { useCachedPromise, useCachedState, withAccessToken } from "@raycast/utils";
 import BeeperDesktop from "@beeper/desktop-api";
@@ -277,9 +279,25 @@ function MessageSearchActions({
           title="Open in Beeper"
           icon={Icon.Window}
           shortcut={Keyboard.Shortcut.Common.Open}
-          onAction={() => focusApp({ chatID: message.chatID, messageID: messageID })}
+          onAction={async () => {
+            if (message.accountID?.startsWith("sh-")) {
+              await showToast({ style: Toast.Style.Failure, title: "Not supported for self-hosted bridges yet" });
+              return;
+            }
+            return focusApp({ chatID: message.chatID, messageID: messageID });
+          }}
         />
-        <Action title="Open Chat in Beeper" icon={Icon.Message} onAction={() => focusApp({ chatID: message.chatID })} />
+        <Action
+          title="Open Chat in Beeper"
+          icon={Icon.Message}
+          onAction={async () => {
+            if (message.accountID?.startsWith("sh-")) {
+              await showToast({ style: Toast.Style.Failure, title: "Not supported for self-hosted bridges yet" });
+              return;
+            }
+            return focusApp({ chatID: message.chatID });
+          }}
+        />
         {messageLink && (
           <Action.CreateQuicklink
             title="Create Message Quicklink"

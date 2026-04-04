@@ -757,7 +757,11 @@ export function ChatListView({
                 title="Open in Beeper"
                 icon={Icon.Window}
                 shortcut={Keyboard.Shortcut.Common.Open}
-                onAction={() => {
+                onAction={async () => {
+                  if (chat.accountID?.startsWith("sh-")) {
+                    await showToast({ style: Toast.Style.Failure, title: "Not supported for self-hosted bridges yet" });
+                    return;
+                  }
                   markChatVisited(chat);
                   return focusApp({ chatID: chat.id });
                 }}
@@ -1074,9 +1078,25 @@ function MessageActions({
           title="Open in Beeper"
           icon={Icon.Window}
           shortcut={Keyboard.Shortcut.Common.Open}
-          onAction={() => focusApp({ chatID: chat.id, messageID: messageID })}
+          onAction={async () => {
+            if (chat.accountID?.startsWith("sh-")) {
+              await showToast({ style: Toast.Style.Failure, title: "Not supported for self-hosted bridges yet" });
+              return;
+            }
+            return focusApp({ chatID: chat.id, messageID: messageID });
+          }}
         />
-        <Action title="Open Chat in Beeper" icon={Icon.Message} onAction={() => focusApp({ chatID: chat.id })} />
+        <Action
+          title="Open Chat in Beeper"
+          icon={Icon.Message}
+          onAction={async () => {
+            if (chat.accountID?.startsWith("sh-")) {
+              await showToast({ style: Toast.Style.Failure, title: "Not supported for self-hosted bridges yet" });
+              return;
+            }
+            return focusApp({ chatID: chat.id });
+          }}
+        />
         {messageLink && (
           <Action.CreateQuicklink
             title="Create Message Quicklink"
