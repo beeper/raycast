@@ -289,6 +289,7 @@ export const searchContacts = async (accountID: string, query: string) => {
   return response?.items && Array.isArray(response.items) ? (response.items as BeeperDesktop.User[]) : [];
 };
 
+
 export const listChats = async (params?: {
   accountIDs?: string[];
   cursor?: string | null;

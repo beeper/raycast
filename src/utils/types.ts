@@ -131,6 +131,11 @@ export function parseService(serviceString: string | undefined): BeeperService {
 export function parseServiceFromAccountID(accountID: string): BeeperService {
   if (!accountID) return "unknown";
 
+  // Matrix/Beeper accounts: "user:beeper.com", "user:beeper.local", or "hungryserv-*"
+  if (accountID.includes(":beeper.com") || accountID.includes(":beeper.local") || accountID.startsWith("hungryserv")) {
+    return "matrix";
+  }
+
   // Strip common prefixes: "local-", "sh-"
   const stripped = accountID.replace(/^(local-|sh-)/, "");
   // Take the part before the first underscore (e.g., "whatsapp" from "whatsapp_ba_...")
