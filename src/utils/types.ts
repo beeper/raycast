@@ -17,6 +17,7 @@ export type BeeperService =
   | "sms"
   | "imessage"
   | "matrix"
+  | "line"
   | "unknown";
 
 /**
@@ -28,6 +29,7 @@ export interface BeeperAccount {
   displayName: string;
   isConnected: boolean;
   username?: string;
+  isSelfHosted?: boolean;
 }
 
 /**
@@ -106,6 +108,7 @@ export function parseService(serviceString: string | undefined): BeeperService {
     matrix: "matrix",
     "beeper (matrix)": "matrix",
     beeper: "matrix",
+    line: "line",
   };
 
   if (serviceMap[normalized]) {
@@ -119,4 +122,20 @@ export function parseService(serviceString: string | undefined): BeeperService {
   }
 
   return "unknown";
+}
+
+/**
+ * Extract service name from an accountID string.
+ * Handles formats like "local-whatsapp_ba_...", "sh-line-m", etc.
+ */
+export function parseServiceFromAccountID(accountID: string): BeeperService {
+  if (!accountID) return "unknown";
+
+  // Strip common prefixes: "local-", "sh-"
+  const stripped = accountID.replace(/^(local-|sh-)/, "");
+  // Take the part before the first underscore (e.g., "whatsapp" from "whatsapp_ba_...")
+  // or before a trailing identifier (e.g., "line" from "line-m")
+  const servicePart = stripped.split(/[_]/)[0];
+
+  return parseService(servicePart);
 }
