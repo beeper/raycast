@@ -6,6 +6,19 @@ import { join } from "node:path";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createBeeperOAuth, createChat, focusApp, listAccounts, retrieveChat, searchContacts } from "./api";
 import { ChatThread } from "./chat";
+import { parseServiceFromAccountID } from "./utils/types";
+import { getServiceDisplayName } from "./utils/service-icons";
+
+const getAccountLabel = (account: { accountID: string; network?: string; user?: { fullName?: string; username?: string; email?: string; phoneNumber?: string } }) => {
+  const service = getServiceDisplayName(parseServiceFromAccountID(account.accountID));
+  const userName =
+    account.user?.fullName ||
+    account.user?.username ||
+    account.user?.email ||
+    account.user?.phoneNumber ||
+    account.accountID;
+  return `${service} • ${userName}`;
+};
 
 const getBeeperAppPath = () => {
   const candidates = ["/Applications/Beeper Desktop.app", join(homedir(), "Applications", "Beeper Desktop.app")];
@@ -44,15 +57,23 @@ export function ContactsView() {
   const { push } = useNavigation();
   const beeperAppPath = getBeeperAppPath();
 
-  useEffect(() => {
-    if (accountFilter === "all" && accounts.length === 1) {
-      setAccountFilter(accounts[0].accountID);
-    }
-  }, [accountFilter, accounts]);
-
   const shouldSearch = query.trim().length > 0 && accounts.length > 0;
   const accountMap = useMemo(() => new Map(accounts.map((account) => [account.accountID, account])), [accounts]);
+  const indexedAccounts = useMemo(
+    () => accounts.map((account, index) => ({ ...account, filterKey: `${account.accountID}-${index}` })),
+    [accounts],
+  );
+  const filterKeyToAccountID = useMemo(
+    () => new Map(indexedAccounts.map((a) => [a.filterKey, a.accountID])),
+    [indexedAccounts],
+  );
   const accountsKey = useMemo(() => accounts.map((account) => account.accountID).join("|"), [accounts]);
+
+  useEffect(() => {
+    if (accountFilter === "all" && indexedAccounts.length === 1) {
+      setAccountFilter(indexedAccounts[0].filterKey);
+    }
+  }, [accountFilter, indexedAccounts]);
   const lastPartialErrorKey = useRef<string | null>(null);
 
   const {
@@ -66,7 +87,9 @@ export function ContactsView() {
       const term = termInput.trim();
       if (!term) return [];
 
-      if (filter === "all") {
+      const resolvedFilter = filter === "all" ? "all" : (filterKeyToAccountID.get(filter) ?? filter);
+
+      if (resolvedFilter === "all") {
         const results = await Promise.allSettled(
           accounts.map(async (account) => {
             const items = await searchContacts(account.accountID, term);
@@ -97,8 +120,8 @@ export function ContactsView() {
         return sortContacts(fulfilled);
       }
 
-      const items = await searchContacts(filter, term);
-      return sortContacts(items.map((contact) => ({ ...contact, accountID: filter })));
+      const items = await searchContacts(resolvedFilter, term);
+      return sortContacts(items.map((contact) => ({ ...contact, accountID: resolvedFilter })));
     },
     [query, accountFilter, accountsKey],
     { keepPreviousData: true },
@@ -112,17 +135,11 @@ export function ContactsView() {
       isLoading={isLoadingAccounts}
     >
       <List.Dropdown.Item key="all" value="all" title="All Accounts" />
-      {accounts.map((account) => (
+      {indexedAccounts.map((account) => (
         <List.Dropdown.Item
-          key={account.accountID}
-          value={account.accountID}
-          title={`${account.network || "Account"} • ${
-            account.user?.fullName ||
-            account.user?.username ||
-            account.user?.email ||
-            account.user?.phoneNumber ||
-            account.accountID
-          }`}
+          key={account.filterKey}
+          value={account.filterKey}
+          title={getAccountLabel(account)}
         />
       ))}
     </List.Dropdown>
@@ -170,15 +187,7 @@ export function ContactsView() {
         const account = accountMap.get((contact as { accountID?: string }).accountID || "");
         const title = contact.fullName || contact.username || contact.id;
         const subtitle = contact.username && contact.fullName ? contact.username : contact.email || contact.phoneNumber;
-        const accountLabel = account
-          ? `${account.network || "Account"} • ${
-              account.user?.fullName ||
-              account.user?.username ||
-              account.user?.email ||
-              account.user?.phoneNumber ||
-              account.accountID
-            }`
-          : undefined;
+        const accountLabel = account ? getAccountLabel(account) : undefined;
         return (
           <List.Item
             key={`${contact.id}-${(contact as { accountID?: string }).accountID ?? "unknown"}`}
