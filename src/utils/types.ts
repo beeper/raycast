@@ -138,9 +138,11 @@ export function parseServiceFromAccountID(accountID: string): BeeperService {
 
   // Strip common prefixes: "local-", "sh-"
   const stripped = accountID.replace(/^(local-|sh-)/, "");
-  // Take the part before the first underscore (e.g., "whatsapp" from "whatsapp_ba_...")
-  // or before a trailing identifier (e.g., "line" from "line-m")
-  const servicePart = stripped.split(/[_]/)[0];
+  // Take the part before the first delimiter (e.g., "whatsapp" from "whatsapp_ba_...",
+  // "slackgo" from "slackgo.T01...", "line" from "line-m")
+  const servicePart = stripped.split(/[_.]/)[0];
+  // Strip "go" bridge suffix (e.g., "discordgo" → "discord", "facebookgo" → "facebook")
+  const cleaned = servicePart.replace(/go$/, "");
 
-  return parseService(servicePart);
+  return parseService(cleaned || servicePart);
 }
