@@ -9,7 +9,11 @@ import { ChatThread } from "./chat";
 import { parseServiceFromAccountID } from "./utils/types";
 import { getServiceDisplayName } from "./utils/service-icons";
 
-const getAccountLabel = (account: { accountID: string; network?: string; user?: { fullName?: string; username?: string; email?: string; phoneNumber?: string } }) => {
+const getAccountLabel = (account: {
+  accountID: string;
+  network?: string;
+  user?: { fullName?: string; username?: string; email?: string; phoneNumber?: string };
+}) => {
   const service = getServiceDisplayName(parseServiceFromAccountID(account.accountID));
   const userName =
     account.user?.fullName ||
@@ -136,11 +140,7 @@ export function ContactsView() {
     >
       <List.Dropdown.Item key="all" value="all" title="All Accounts" />
       {indexedAccounts.map((account) => (
-        <List.Dropdown.Item
-          key={account.filterKey}
-          value={account.filterKey}
-          title={getAccountLabel(account)}
-        />
+        <List.Dropdown.Item key={account.filterKey} value={account.filterKey} title={getAccountLabel(account)} />
       ))}
     </List.Dropdown>
   );
