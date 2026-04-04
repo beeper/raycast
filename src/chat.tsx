@@ -1190,14 +1190,17 @@ export function ComposeMessageForm({
     },
   });
 
-  useEffect(() => {
-    if (!initialText && draftText && values.text !== draftText) {
-      setValue("text", draftText);
-    }
-  }, [draftText, initialText, setValue, values.text]);
+  const draftLoaded = useRef(false);
 
   useEffect(() => {
-    if (values.text !== undefined) {
+    if (!draftLoaded.current && !initialText && draftText) {
+      draftLoaded.current = true;
+      setValue("text", draftText);
+    }
+  }, [draftText, initialText, setValue]);
+
+  useEffect(() => {
+    if (draftLoaded.current && values.text !== undefined) {
       void setDraftText(values.text);
     }
   }, [setDraftText, values.text]);
