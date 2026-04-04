@@ -4,7 +4,7 @@ import { createBeeperOAuth } from "./api";
 import { clearStoredAuthentication, getBeeperClient, checkBeeperConnection } from "./services/beeper-client";
 import { MOCK_ACCOUNTS } from "./utils/mock-data";
 import { getServiceDisplayName, getServiceIcon } from "./utils/service-icons";
-import { BeeperAccount, parseService } from "./utils/types";
+import { BeeperAccount, parseService, parseServiceFromAccountID } from "./utils/types";
 
 interface Preferences {
   useMockData?: boolean;
@@ -31,13 +31,18 @@ function ListAccountsCommand() {
       const client = await getBeeperClient();
       const response = await client.accounts.list();
 
-      const transformedAccounts: BeeperAccount[] = (response || []).map((account) => ({
-        id: account.accountID,
-        service: parseService(account.network),
-        displayName: account.user?.fullName || account.network || "Unknown",
-        isConnected: true,
-        username: account.user?.username,
-      }));
+      const transformedAccounts: BeeperAccount[] = (response || []).map((account, index) => {
+        const service = parseServiceFromAccountID(account.accountID);
+        const isSelfHosted = account.accountID?.startsWith("sh-") ?? false;
+        return {
+          id: account.accountID ? `${account.accountID}-${index}` : `account-${index}`,
+          service,
+          displayName: account.user?.fullName || getServiceDisplayName(service),
+          isConnected: true,
+          username: account.user?.username,
+          isSelfHosted,
+        };
+      });
 
       return transformedAccounts.sort((a, b) =>
         getServiceDisplayName(a.service).localeCompare(getServiceDisplayName(b.service)),
@@ -137,6 +142,9 @@ function AccountListItem({ account, onRefresh }: AccountListItemProps) {
       subtitle={account.username || account.displayName}
       icon={{ source: serviceInfo.icon as Icon, tintColor: serviceInfo.tintColor }}
       accessories={[
+        ...(account.isSelfHosted
+          ? [{ tag: { value: "Self-hosted", color: Color.Purple } }]
+          : []),
         {
           tag: {
             value: account.isConnected ? "Connected" : "Disconnected",
