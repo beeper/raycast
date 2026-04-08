@@ -99,7 +99,7 @@ export const focusApp = async (
     await getBeeperDesktop().focus(params);
     await closeMainWindow();
     await showHUD("Beeper Desktop focused");
-  } catch (error) {
+  } catch {
     await showHUD("Failed to focus Beeper Desktop");
   }
 };
@@ -288,7 +288,6 @@ export const searchContacts = async (accountID: string, query: string) => {
   })) as { items?: BeeperDesktop.User[] };
   return response?.items && Array.isArray(response.items) ? (response.items as BeeperDesktop.User[]) : [];
 };
-
 
 export const listChats = async (params?: {
   accountIDs?: string[];

@@ -4,7 +4,7 @@ import { createBeeperOAuth } from "./api";
 import { clearStoredAuthentication, getBeeperClient, checkBeeperConnection } from "./services/beeper-client";
 import { MOCK_ACCOUNTS } from "./utils/mock-data";
 import { getServiceDisplayName, getServiceIcon } from "./utils/service-icons";
-import { BeeperAccount, parseService, parseServiceFromAccountID } from "./utils/types";
+import { BeeperAccount, parseServiceFromAccountID } from "./utils/types";
 
 interface Preferences {
   useMockData?: boolean;
@@ -142,9 +142,7 @@ function AccountListItem({ account, onRefresh }: AccountListItemProps) {
       subtitle={account.username || account.displayName}
       icon={{ source: serviceInfo.icon as Icon, tintColor: serviceInfo.tintColor }}
       accessories={[
-        ...(account.isSelfHosted
-          ? [{ tag: { value: "Self-hosted", color: Color.Purple } }]
-          : []),
+        ...(account.isSelfHosted ? [{ tag: { value: "Self-hosted", color: Color.Purple } }] : []),
         {
           tag: {
             value: account.isConnected ? "Connected" : "Disconnected",
