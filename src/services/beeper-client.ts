@@ -1,20 +1,11 @@
 import BeeperDesktop from "@beeper/desktop-api";
-import { getPreferenceValues, LocalStorage } from "@raycast/api";
+import { LocalStorage } from "@raycast/api";
 import { getAccessToken } from "@raycast/utils";
-import { createBeeperOAuth, TOKEN_STORAGE_KEY } from "../api";
-
-interface Preferences {
-  baseUrl?: string;
-}
+import { createBeeperOAuth, getBaseURL, TOKEN_STORAGE_KEY } from "../api";
 
 let clientInstance: BeeperDesktop | null = null;
 let lastAccessToken: string | null = null;
 let lastBaseURL: string | null = null;
-
-const getBaseURL = () => {
-  const preferences = getPreferenceValues<Preferences>();
-  return preferences.baseUrl || "http://localhost:23373";
-};
 
 export async function getBeeperClient(): Promise<BeeperDesktop> {
   let accessToken: string | undefined;

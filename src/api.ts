@@ -1,5 +1,5 @@
 import BeeperDesktop from "@beeper/desktop-api";
-import { closeMainWindow, getPreferenceValues, LocalStorage, OAuth, showHUD } from "@raycast/api";
+import { closeMainWindow, getPreferenceValues, LocalStorage, OAuth, showHUD, showToast, Toast } from "@raycast/api";
 import { OAuthService, usePromise, getAccessToken } from "@raycast/utils";
 import { readFile } from "node:fs/promises";
 import { basename } from "node:path";
@@ -13,6 +13,7 @@ let clientInstance: BeeperDesktop | null = null;
 let lastBaseURL: string | null = null;
 let lastAccessToken: string | null = null;
 export const TOKEN_STORAGE_KEY = "beeper-oauth-token";
+export const DEFAULT_BASE_URL = "http://localhost:23373";
 
 const getPreferences = () => getPreferenceValues<Preferences>();
 
@@ -25,9 +26,9 @@ const createOAuthClient = () =>
     description: "Connect to your local Beeper Desktop app",
   });
 
-const getBaseURL = () => {
+export const getBaseURL = () => {
   const preferences = getPreferences();
-  return preferences.baseUrl || "http://localhost:23373";
+  return preferences.baseUrl || DEFAULT_BASE_URL;
 };
 
 const RAYCAST_EXTENSION_AUTHOR = "batuhan";
@@ -99,8 +100,13 @@ export const focusApp = async (
     await getBeeperDesktop().focus(params);
     await closeMainWindow();
     await showHUD("Beeper Desktop focused");
-  } catch {
-    await showHUD("Failed to focus Beeper Desktop");
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : "";
+    if (detail.includes("ECONNREFUSED") || detail.includes("fetch failed")) {
+      await showToast({ style: Toast.Style.Failure, title: "Beeper Desktop is not running" });
+    } else {
+      await showHUD("Failed to focus Beeper Desktop");
+    }
   }
 };
 

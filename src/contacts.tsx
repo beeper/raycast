@@ -1,5 +1,6 @@
 import { Action, ActionPanel, Icon, List, Toast, showToast, useNavigation } from "@raycast/api";
 import { useCachedPromise, withAccessToken } from "@raycast/utils";
+import BeeperDesktop from "@beeper/desktop-api";
 import { existsSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
@@ -8,6 +9,8 @@ import { createBeeperOAuth, createChat, focusApp, listAccounts, retrieveChat, se
 import { ChatThread } from "./chat";
 import { parseServiceFromAccountID } from "./utils/types";
 import { getServiceDisplayName } from "./utils/service-icons";
+
+type ContactWithAccount = BeeperDesktop.User & { accountID: string };
 
 const getAccountLabel = (account: {
   accountID: string;
@@ -184,13 +187,13 @@ export function ContactsView() {
       throttle
     >
       {contacts.map((contact) => {
-        const account = accountMap.get((contact as { accountID?: string }).accountID || "");
+        const account = accountMap.get((contact as ContactWithAccount).accountID || "");
         const title = contact.fullName || contact.username || contact.id;
         const subtitle = contact.username && contact.fullName ? contact.username : contact.email || contact.phoneNumber;
         const accountLabel = account ? getAccountLabel(account) : undefined;
         return (
           <List.Item
-            key={`${contact.id}-${(contact as { accountID?: string }).accountID ?? "unknown"}`}
+            key={`${contact.id}-${(contact as ContactWithAccount).accountID ?? "unknown"}`}
             icon={contact.isSelf ? Icon.Star : Icon.Person}
             title={title}
             subtitle={subtitle}
@@ -201,7 +204,7 @@ export function ContactsView() {
                   title="Start Chat"
                   icon={Icon.Message}
                   onAction={async () => {
-                    const selectedAccountID = (contact as { accountID?: string }).accountID;
+                    const selectedAccountID = (contact as ContactWithAccount).accountID;
                     if (!selectedAccountID) return;
                     const toast = await showToast({ style: Toast.Style.Animated, title: "Creating chat" });
                     try {
@@ -212,14 +215,15 @@ export function ContactsView() {
                       });
                       toast.style = Toast.Style.Success;
                       toast.title = "Chat created";
-                      const newChatID =
-                        (response as { chatID?: string }).chatID || (response as { id?: string }).id || undefined;
+                      const res = response as unknown as Record<string, unknown>;
+                      const newChatID = (res.chatID as string) || (res.id as string) || undefined;
                       if (newChatID) {
                         try {
                           const chat = await retrieveChat(newChatID, { maxParticipantCount: 0 });
                           push(<ChatThread chat={chat} />);
                         } catch {
-                          // fallback: keep the list visible if chat load fails
+                          toast.style = Toast.Style.Success;
+                          toast.message = "Chat created but could not open it";
                         }
                       }
                       revalidate();
