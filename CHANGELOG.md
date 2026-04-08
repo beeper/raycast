@@ -1,6 +1,6 @@
 # Beeper Changelog
 
-## [Prepare for Publish & Partial Self-hosted LINE Bridge Support] - {PR_MERGE_DATE}
+## [Prepare for Publish] - {PR_MERGE_DATE}
 
 - Self-hosted bridge support with "Self-hosted" tag on accounts
 - LINE and Steam messaging service support
