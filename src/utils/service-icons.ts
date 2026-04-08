@@ -24,6 +24,7 @@ export const serviceIcons: Record<BeeperService, ServiceIconConfig> = {
   imessage: { icon: Icon.Message, color: Color.Blue, tintColor: Color.Blue },
   matrix: { icon: Icon.Network, color: Color.Green, tintColor: Color.Green },
   line: { icon: Icon.Message, color: Color.Green, tintColor: Color.Green },
+  steam: { icon: Icon.Gear, color: Color.Blue, tintColor: Color.Blue },
   unknown: { icon: Icon.QuestionMark, color: Color.SecondaryText },
 };
 
@@ -48,6 +49,7 @@ const serviceDisplayNames: Record<BeeperService, string> = {
   imessage: "iMessage",
   matrix: "Beeper (Matrix)",
   line: "LINE",
+  steam: "Steam",
   unknown: "Unknown",
 };
 

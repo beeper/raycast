@@ -18,6 +18,7 @@ export type BeeperService =
   | "imessage"
   | "matrix"
   | "line"
+  | "steam"
   | "unknown";
 
 /**
@@ -109,6 +110,7 @@ export function parseService(serviceString: string | undefined): BeeperService {
     "beeper (matrix)": "matrix",
     beeper: "matrix",
     line: "line",
+    steam: "steam",
   };
 
   if (serviceMap[normalized]) {
