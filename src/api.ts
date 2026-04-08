@@ -101,12 +101,12 @@ export const focusApp = async (
     await closeMainWindow();
     await showHUD("Beeper Desktop focused");
   } catch (error) {
-    const detail = error instanceof Error ? error.message : "";
-    if (detail.includes("ECONNREFUSED") || detail.includes("fetch failed")) {
-      await showToast({ style: Toast.Style.Failure, title: "Beeper Desktop is not running" });
-    } else {
-      await showHUD("Failed to focus Beeper Desktop");
-    }
+    const detail = error instanceof Error ? error.message : String(error);
+    await showToast({
+      style: Toast.Style.Failure,
+      title: "Failed to focus Beeper Desktop",
+      message: detail,
+    });
   }
 };
 
