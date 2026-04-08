@@ -81,7 +81,7 @@
     }
   ],
   "dependencies": {
-    "@beeper/desktop-api": "4.2.3",
+    "@beeper/desktop-api": "^4.7.0",
     "@raycast/api": "^1.104.11",
     "@raycast/utils": "^2.2.3",
     "fuse.js": "^7.2.0"
