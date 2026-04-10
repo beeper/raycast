@@ -1190,19 +1190,25 @@ export function ComposeMessageForm({
     },
   });
 
+  const initialTextRef = useRef(initialText ?? draftText ?? "");
   const draftLoaded = useRef(false);
 
   useEffect(() => {
-    if (!draftLoaded.current && !initialText && draftText) {
+    if (!draftLoaded.current && initialText == null && draftText) {
       draftLoaded.current = true;
       setValue("text", draftText);
     }
   }, [draftText, initialText, setValue]);
 
   useEffect(() => {
-    if (draftLoaded.current && values.text !== undefined) {
-      void setDraftText(values.text);
+    if (values.text === undefined) return;
+
+    if (!draftLoaded.current) {
+      if (values.text === initialTextRef.current) return;
+      draftLoaded.current = true;
     }
+
+    void setDraftText(values.text);
   }, [setDraftText, values.text]);
 
   return (
